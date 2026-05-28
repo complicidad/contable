@@ -74,7 +74,9 @@
             };
         };
 
-        // --- CÓDIGO GOOGLE APPS SCRIPT SIMPLIFICADO ---
+        // --- CÓDIGO GOOGLE APPS SCRIPT CORREGIDO ---
+        // (El error ocurría porque el objeto de Apps Script no soporta '.setHeaders()'. 
+        // Google ya maneja el CORS automáticamente si el output es JSON).
         const appsScriptCode = `function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -85,10 +87,12 @@
     if (action === "saveCashFlow") {
       var sheet = ss.getSheetByName("FlujoDeCaja");
       if(sheet) sheet.appendRow([payload.id, payload.date, payload.client, payload.concept, payload.monto, payload.method, payload.voucher, payload.voucherUrl, payload.notes, payload.category]);
-      return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
+        .setMimeType(ContentService.MimeType.JSON);
     }
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "error", "msg": error.message})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "msg": error.message}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -117,9 +121,11 @@ function doGet(e) {
       });
     }
 
-    return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "error", "msg": error.message})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "msg": error.message}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }`;
 
@@ -456,7 +462,8 @@ function doGet(e) {
             setIsFetchingData(true);
             
             try {
-              const response = await fetch(url, { redirect: 'follow' });
+              // El 'fetch' a Google Apps Script debe ser limpio para evitar problemas de pre-flight (CORS)
+              const response = await fetch(url);
               if (!response.ok) throw new Error("La URL de Google Apps Script no devolvió una respuesta válida.");
               const data = await response.json();
               if (data.status === "error") throw new Error(data.msg || "Error interno en Google Apps Script");
@@ -714,8 +721,17 @@ function doGet(e) {
 
             const newCashEntry = { 
                 id: newCashEntryId, 
-                ...data, 
-                monto: montoCashFlow 
+                date: data.date,
+                client: data.client,
+                concept: data.concept,
+                category: data.category,
+                income: data.income,
+                expense: data.expense,
+                monto: montoCashFlow,
+                method: data.method,
+                voucher: data.voucher,
+                voucherUrl: data.voucherUrl,
+                notes: data.notes
             };
 
             setCashFlow(prev => [...prev, newCashEntry]);
