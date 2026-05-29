@@ -5,13 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GestorPro - LATAM5S</title>
     
-    <!-- Carga de Tailwind CSS para los estilos -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Carga de Babel para que el navegador entienda JSX (React) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Estilos personalizados -->
     <style>
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -21,7 +17,6 @@
             animation: fadeIn 0.3s ease-out forwards;
         }
         
-        /* Ocultar scrollbar para un diseño más limpio */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -40,10 +35,8 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans">
     
-    <!-- Contenedor principal de React -->
     <div id="root"></div>
 
-    <!-- Script de React usando importaciones de módulos -->
     <script type="text/babel" data-type="module">
         import React, { useState, useMemo, useEffect } from 'https://esm.sh/react@18.2.0';
         import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
@@ -53,10 +46,8 @@
           RefreshCw, Copy, Percent, Landmark
         } from 'https://esm.sh/lucide-react@0.263.1';
 
-        // --- DATOS INICIALES ---
         const initialCashFlow = [];
 
-        // --- FUNCIONES AUXILIARES ---
         const addMonthsToDate = (dateStr, months) => {
           const date = new Date(dateStr + 'T00:00:00'); 
           date.setMonth(date.getMonth() + Number(months));
@@ -74,9 +65,6 @@
             };
         };
 
-        // --- CÓDIGO GOOGLE APPS SCRIPT CORREGIDO ---
-        // (El error ocurría porque el objeto de Apps Script no soporta '.setHeaders()'. 
-        // Google ya maneja el CORS automáticamente si el output es JSON).
         const appsScriptCode = `function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -129,7 +117,6 @@ function doGet(e) {
   }
 }`;
 
-        // --- COMPONENTE: GRÁFICA DE UTILIDAD NETA ---
         const NetProfitChart = ({ data }) => {
           const chartHeight = 280;
           const chartWidth = 800;
@@ -201,7 +188,6 @@ function doGet(e) {
           );
         };
 
-        // --- COMPONENTE: GRÁFICA DE USUARIOS ACTIVOS ---
         const ActiveUsersChart = ({ data }) => {
           const chartHeight = 280;
           const chartWidth = 800;
@@ -275,7 +261,6 @@ function doGet(e) {
           );
         };
 
-        // --- COMPONENTES MODALES ---
         const ModalCashFlow = ({ onClose, onSave, isSaving }) => {
           const [type, setType] = useState('ingreso');
           const [category, setCategory] = useState('SaaS (Ingresos)');
@@ -283,12 +268,45 @@ function doGet(e) {
           const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
           const [autoUpdateSub, setAutoUpdateSub] = useState(true);
           const [voucherType, setVoucherType] = useState('Pendiente / Sin Comprobante');
+          const [promoBienvenida, setPromoBienvenida] = useState(false);
           
           const [manualConcept, setManualConcept] = useState('');
-          const [manualAmount, setManualAmount] = useState('');
+          const [manualAmount, setManualAmount] = useState('49.90');
 
           const currentConcept = type === 'ingreso' ? `Suscripción x ${months} mes${months > 1 ? 'es' : ''}` : manualConcept;
-          const currentAmount = type === 'ingreso' ? (29.9 * months).toFixed(2) : manualAmount;
+
+          const handleTypeChange = (newType) => {
+            setType(newType);
+            if (newType === 'ingreso') {
+              setMonths(1);
+              setPromoBienvenida(false);
+              setManualAmount('49.90');
+            } else {
+              setManualAmount('');
+            }
+          };
+
+          const handleMonthsChange = (newMonths) => {
+            setMonths(newMonths);
+            if (type === 'ingreso') {
+              if (newMonths === 1) {
+                setManualAmount(promoBienvenida ? '29.90' : '49.90');
+              } else if (newMonths === 6) {
+                setManualAmount('269.90'); // Precio de 6 meses
+              } else if (newMonths === 12) {
+                setManualAmount('499.90'); // Precio de 1 año
+              } else {
+                setManualAmount((49.90 * newMonths).toFixed(2)); // Precio regular escalado
+              }
+            }
+          };
+
+          const handlePromoChange = (isPromo) => {
+            setPromoBienvenida(isPromo);
+            if (type === 'ingreso' && months === 1) {
+              setManualAmount(isPromo ? '29.90' : '49.90');
+            }
+          };
 
           const handleSubmit = (e) => {
             e.preventDefault();
@@ -300,8 +318,8 @@ function doGet(e) {
               client: formData.get('client') || '',
               concept: currentConcept,
               category: type === 'ingreso' ? category : 'Egresos Generales',
-              income: type === 'ingreso' ? Number(currentAmount) : 0,
-              expense: type === 'egreso' ? Number(currentAmount) : 0,
+              income: type === 'ingreso' ? Number(manualAmount) : 0,
+              expense: type === 'egreso' ? Number(manualAmount) : 0,
               method: formData.get('method') || 'Yape',
               voucher: voucherType,
               voucherUrl: formData.get('voucherUrl') || '',
@@ -313,18 +331,18 @@ function doGet(e) {
 
           return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-                <div className="flex justify-between items-center p-4 border-b bg-slate-50">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[95vh] overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b bg-slate-50 shrink-0">
                   <h3 className="font-semibold text-lg text-slate-800 flex items-center gap-2">
                     <Wallet className="text-blue-600" size={20} /> Registro de Caja
                   </h3>
                   <button onClick={onClose} disabled={isSaving} className="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"><X size={20} /></button>
                 </div>
                 
-                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
                   <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button type="button" onClick={() => setType('ingreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'ingreso' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Ingreso</button>
-                    <button type="button" onClick={() => setType('egreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'egreso' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Egreso</button>
+                    <button type="button" onClick={() => handleTypeChange('ingreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'ingreso' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Ingreso</button>
+                    <button type="button" onClick={() => handleTypeChange('egreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'egreso' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Egreso</button>
                   </div>
 
                   {type === 'ingreso' && (
@@ -356,12 +374,22 @@ function doGet(e) {
                           Meses a pagar
                         </label>
                         <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => setMonths(Math.max(1, months - 1))} disabled={isSaving} className="w-8 h-8 rounded-full bg-white text-blue-600 shadow-sm font-bold border hover:bg-blue-100 disabled:opacity-50">-</button>
+                          <button type="button" onClick={() => handleMonthsChange(Math.max(1, months - 1))} disabled={isSaving} className="w-8 h-8 rounded-full bg-white text-blue-600 shadow-sm font-bold border hover:bg-blue-100 disabled:opacity-50">-</button>
                           <span className="w-4 text-center font-bold text-slate-700">{months}</span>
-                          <button type="button" onClick={() => setMonths(months + 1)} disabled={isSaving} className="w-8 h-8 rounded-full bg-white text-blue-600 shadow-sm font-bold border hover:bg-blue-100 disabled:opacity-50">+</button>
+                          <button type="button" onClick={() => handleMonthsChange(months + 1)} disabled={isSaving} className="w-8 h-8 rounded-full bg-white text-blue-600 shadow-sm font-bold border hover:bg-blue-100 disabled:opacity-50">+</button>
                         </div>
                       </div>
-                      <p className="text-xs text-blue-800 leading-tight">
+                      
+                      {months === 1 && (
+                        <label className="flex items-center gap-2 cursor-pointer group animate-fade-in">
+                          <input type="checkbox" checked={promoBienvenida} onChange={e => handlePromoChange(e.target.checked)} disabled={isSaving} className="w-4 h-4 text-blue-600 rounded border-blue-300 focus:ring-blue-500 disabled:opacity-50" />
+                          <span className="text-sm font-bold text-blue-800 leading-tight">
+                            Promo Bienvenida (S/ 29.90)
+                          </span>
+                        </label>
+                      )}
+
+                      <p className="text-xs text-blue-800 leading-tight border-t border-blue-200/50 pt-2 mt-2">
                         El sistema detectará que dice <b>"x {months} mes"</b> en el concepto y extenderá la suscripción automáticamente.
                       </p>
                     </div>
@@ -388,9 +416,9 @@ function doGet(e) {
                         type="number" 
                         step="0.01" 
                         name="amount" 
-                        value={currentAmount} 
+                        value={manualAmount} 
                         onChange={(e) => setManualAmount(e.target.value)} 
-                        disabled={type === 'ingreso' || isSaving} 
+                        disabled={isSaving} 
                         className={`w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none font-bold ${type === 'ingreso' ? 'text-emerald-600' : 'text-rose-600'} disabled:bg-slate-100`} 
                       />
                     </div>
@@ -434,7 +462,6 @@ function doGet(e) {
           );
         };
 
-        // --- COMPONENTE PRINCIPAL ---
         function App() {
           const [activeTab, setActiveTab] = useState('dashboard');
           const [cashFlow, setCashFlow] = useState(initialCashFlow);
@@ -462,7 +489,6 @@ function doGet(e) {
             setIsFetchingData(true);
             
             try {
-              // El 'fetch' a Google Apps Script debe ser limpio para evitar problemas de pre-flight (CORS)
               const response = await fetch(url);
               if (!response.ok) throw new Error("La URL de Google Apps Script no devolvió una respuesta válida.");
               const data = await response.json();
@@ -724,14 +750,14 @@ function doGet(e) {
                 date: data.date,
                 client: data.client,
                 concept: data.concept,
-                category: data.category,
-                income: data.income,
-                expense: data.expense,
                 monto: montoCashFlow,
                 method: data.method,
                 voucher: data.voucher,
                 voucherUrl: data.voucherUrl,
-                notes: data.notes
+                notes: data.notes,
+                category: data.category,
+                income: data.income || 0,
+                expense: data.expense || 0
             };
 
             setCashFlow(prev => [...prev, newCashEntry]);
@@ -1130,7 +1156,6 @@ function doGet(e) {
           );
         }
 
-        // --- RENDERIZADO EN EL DOM ---
         const rootElement = document.getElementById('root');
         const root = createRoot(rootElement);
         root.render(<App />);
