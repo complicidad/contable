@@ -43,7 +43,7 @@
         import { 
           LayoutDashboard, Wallet, Users, Plus, TrendingUp, TrendingDown, AlertCircle,
           X, CheckCircle2, Clock, Zap, ExternalLink, Loader2, Settings, Database,
-          RefreshCw, Copy, Percent, Landmark
+          RefreshCw, Copy, Calendar, Globe
         } from 'https://esm.sh/lucide-react@0.263.1';
 
         const initialCashFlow = [];
@@ -263,7 +263,7 @@ function doGet(e) {
 
         const ModalCashFlow = ({ onClose, onSave, isSaving }) => {
           const [type, setType] = useState('ingreso');
-          const [category, setCategory] = useState('SaaS (Ingresos)');
+          const [category, setCategory] = useState('Ventas SaaS (Formal)');
           const [months, setMonths] = useState(1);
           const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
           const [autoUpdateSub, setAutoUpdateSub] = useState(true);
@@ -273,37 +273,54 @@ function doGet(e) {
           const [manualConcept, setManualConcept] = useState('');
           const [manualAmount, setManualAmount] = useState('49.90');
 
-          const currentConcept = type === 'ingreso' ? `Suscripción x ${months} mes${months > 1 ? 'es' : ''}` : manualConcept;
+          // El concepto se autogenera solo si la categoría es SaaS, de lo contrario usamos el manual
+          const isSaasCategory = category === 'Ventas SaaS (Formal)' || category === 'Ventas SaaS (Informal)';
+          const currentConcept = (type === 'ingreso' && isSaasCategory) ? `Suscripción x ${months} mes${months > 1 ? 'es' : ''}` : manualConcept;
 
           const handleTypeChange = (newType) => {
             setType(newType);
             if (newType === 'ingreso') {
+              setCategory('Ventas SaaS (Formal)');
               setMonths(1);
               setPromoBienvenida(false);
               setManualAmount('49.90');
             } else {
+              setCategory('Egresos Generales');
               setManualAmount('');
+              setManualConcept('');
+            }
+          };
+
+          const handleCategoryChange = (e) => {
+            const newCat = e.target.value;
+            setCategory(newCat);
+            if (type === 'ingreso' && !newCat.includes('SaaS')) {
+               // Si no es SaaS, limpiamos el monto para evitar confusiones
+               setManualAmount('');
+               setManualConcept('');
+            } else if (type === 'ingreso' && newCat.includes('SaaS')) {
+               handleMonthsChange(months); // Recalcular monto
             }
           };
 
           const handleMonthsChange = (newMonths) => {
             setMonths(newMonths);
-            if (type === 'ingreso') {
+            if (type === 'ingreso' && isSaasCategory) {
               if (newMonths === 1) {
                 setManualAmount(promoBienvenida ? '29.90' : '49.90');
               } else if (newMonths === 6) {
-                setManualAmount('269.90'); // Precio de 6 meses
+                setManualAmount('269.90'); 
               } else if (newMonths === 12) {
-                setManualAmount('499.90'); // Precio de 1 año
+                setManualAmount('499.90'); 
               } else {
-                setManualAmount((49.90 * newMonths).toFixed(2)); // Precio regular escalado
+                setManualAmount((49.90 * newMonths).toFixed(2)); 
               }
             }
           };
 
           const handlePromoChange = (isPromo) => {
             setPromoBienvenida(isPromo);
-            if (type === 'ingreso' && months === 1) {
+            if (type === 'ingreso' && months === 1 && isSaasCategory) {
               setManualAmount(isPromo ? '29.90' : '49.90');
             }
           };
@@ -317,14 +334,14 @@ function doGet(e) {
               date: formData.get('date') || date,
               client: formData.get('client') || '',
               concept: currentConcept,
-              category: type === 'ingreso' ? category : 'Egresos Generales',
+              category: category,
               income: type === 'ingreso' ? Number(manualAmount) : 0,
               expense: type === 'egreso' ? Number(manualAmount) : 0,
               method: formData.get('method') || 'Yape',
               voucher: voucherType,
               voucherUrl: formData.get('voucherUrl') || '',
               notes: formData.get('notes') || '',
-              autoUpdateSub: type === 'ingreso' && autoUpdateSub,
+              autoUpdateSub: type === 'ingreso' && isSaasCategory && autoUpdateSub,
               months: Number(months)
             });
           };
@@ -345,15 +362,32 @@ function doGet(e) {
                     <button type="button" onClick={() => handleTypeChange('egreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'egreso' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Egreso</button>
                   </div>
 
-                  {type === 'ingreso' && (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Ingreso</label>
-                      <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100">
-                        <option value="SaaS (Ingresos)">Formal (Se emite Boleta/Factura)</option>
-                        <option value="Informal (Ingresos)">Informal (Antes de la empresa)</option>
-                      </select>
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
+                    <select value={category} onChange={handleCategoryChange} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 font-medium">
+                      {type === 'ingreso' ? (
+                        <>
+                          <optgroup label="Suscripciones (Activan servicio)">
+                            <option value="Ventas SaaS (Formal)">Ventas SaaS (Formales)</option>
+                            <option value="Ventas SaaS (Informal)">Ventas SaaS (Informales)</option>
+                          </optgroup>
+                          <optgroup label="Otros Ingresos (No activan servicio)">
+                            <option value="Capital Inicial">Capital Inicial</option>
+                            <option value="Préstamo de Socios">Préstamo de Socios</option>
+                            <option value="Otros Ingresos">Otros Ingresos</option>
+                          </optgroup>
+                        </>
+                      ) : (
+                        <>
+                          <option value="Servidores / APIs">Servidores / APIs</option>
+                          <option value="Marketing y Publicidad">Marketing y Publicidad</option>
+                          <option value="Planilla / Honorarios">Planilla / Honorarios</option>
+                          <option value="Impuestos">Impuestos</option>
+                          <option value="Egresos Generales">Egresos Generales / Otros</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -361,12 +395,12 @@ function doGet(e) {
                       <input required type="date" name="date" value={date} onChange={e => setDate(e.target.value)} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Cliente / Proveedor</label>
-                      <input required type="text" name="client" placeholder={type === 'ingreso' ? "Ej. 987654321" : "Nombre del proveedor..."} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Cliente / Referencia</label>
+                      <input required type="text" name="client" placeholder={type === 'ingreso' ? "Ej. 987654321" : "Ej. Facebook Ads..."} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
                     </div>
                   </div>
 
-                  {type === 'ingreso' && (
+                  {type === 'ingreso' && isSaasCategory && (
                     <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="text-sm font-semibold text-blue-800 flex items-center gap-1">
@@ -390,7 +424,7 @@ function doGet(e) {
                       )}
 
                       <p className="text-xs text-blue-800 leading-tight border-t border-blue-200/50 pt-2 mt-2">
-                        El sistema detectará que dice <b>"x {months} mes"</b> en el concepto y extenderá la suscripción automáticamente.
+                        El sistema detectará que dice <b>"x {months} mes"</b> y extenderá la suscripción automáticamente.
                       </p>
                     </div>
                   )}
@@ -403,7 +437,7 @@ function doGet(e) {
                       name="concept" 
                       value={currentConcept} 
                       onChange={(e) => setManualConcept(e.target.value)} 
-                      disabled={type === 'ingreso' || isSaving} 
+                      disabled={(type === 'ingreso' && isSaasCategory) || isSaving} 
                       className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" 
                     />
                   </div>
@@ -432,6 +466,21 @@ function doGet(e) {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Método de Pago</label>
+                      <select name="method" disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100">
+                        <option value="Yape">Yape</option>
+                        <option value="Transferencia BCP">Transferencia BCP</option>
+                        <option value="Transferencia Interbank">Transferencia Interbank</option>
+                        <option value="Efectivo">Efectivo</option>
+                      </select>
+                    </div>
+                    <div>
+                      {/* Espacio libre para mantener diseño simétrico */}
+                    </div>
+                  </div>
+
                   {voucherType !== 'Pendiente / Sin Comprobante' && (
                     <div className="animate-fade-in">
                       <label className="block text-sm font-medium text-slate-700 mb-1">URL del Comprobante</label>
@@ -446,7 +495,7 @@ function doGet(e) {
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Notas / Observaciones</label>
-                    <input type="text" name="notes" placeholder="Ej. Número secundario..." disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" />
+                    <input type="text" name="notes" placeholder="Opcional..." disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" />
                   </div>
                   
                   <div className="pt-4 border-t flex justify-end gap-2 mt-2">
@@ -473,6 +522,11 @@ function doGet(e) {
           
           const [scriptUrl, setScriptUrl] = useState('');
           const [tempScriptUrl, setTempScriptUrl] = useState('');
+
+          const [filterMonth, setFilterMonth] = useState(() => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          });
 
           const showMessage = (msg, type = 'success') => {
             setNotification({ msg, type });
@@ -561,7 +615,12 @@ function doGet(e) {
                 const match = conceptStr.match(/x\s*(\d+)\s*mes/i);
                 const months = match ? parseInt(match[1]) : 0;
 
-                if (months > 0) {
+                // Solo si encontramos meses y es una categoría de SaaS
+                const isSaas = entry.category && entry.category.includes('SaaS');
+                // Respaldo para data antigua sin categoria especifica
+                const wasFormalOrInformalBeforeUpdate = !entry.category && entry.voucher; 
+
+                if (months > 0 && (isSaas || wasFormalOrInformalBeforeUpdate)) {
                   if (!subsMap[entry.client]) {
                     subsMap[entry.client] = {
                       client: entry.client,
@@ -592,7 +651,7 @@ function doGet(e) {
 
           const monthlyData = useMemo(() => {
             const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const currentYear = new Date().getFullYear();
+            const targetYear = parseInt(filterMonth.split('-')[0], 10);
             
             const data = months.map(m => ({ month: m, net: 0 }));
             
@@ -601,7 +660,7 @@ function doGet(e) {
               const monthItems = cashFlow.filter(item => {
                 if(!item.date) return false;
                 const d = new Date(item.date + 'T00:00:00');
-                return d.getFullYear() === currentYear && d.getMonth() === i;
+                return d.getFullYear() === targetYear && d.getMonth() === i;
               });
 
               monthItems.forEach(item => {
@@ -611,17 +670,17 @@ function doGet(e) {
               data[i].net = net;
             }
             return data;
-          }, [cashFlow]);
+          }, [cashFlow, filterMonth]);
 
           const monthlyActiveUsersData = useMemo(() => {
             const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const currentYear = new Date().getFullYear();
+            const targetYear = parseInt(filterMonth.split('-')[0], 10);
             
             const data = months.map(m => ({ month: m, activeUsers: 0 }));
             
             for (let i = 0; i < 12; i++) {
-              const monthStart = new Date(currentYear, i, 1);
-              const monthEnd = new Date(currentYear, i + 1, 0); 
+              const monthStart = new Date(targetYear, i, 1);
+              const monthEnd = new Date(targetYear, i + 1, 0); 
               
               let activeCount = 0;
               derivedSubscriptions.forEach(sub => {
@@ -636,90 +695,91 @@ function doGet(e) {
               data[i].activeUsers = activeCount;
             }
             return data;
-          }, [derivedSubscriptions]);
+          }, [derivedSubscriptions, filterMonth]);
 
+          // CÁLCULOS PRINCIPALES DE MÉTRICAS (GLOBAL, MES ACTUAL, MES ANTERIOR)
           const metrics = useMemo(() => {
-            let totalIncome = 0;
-            let formalIncome = 0;
-            let informalIncome = 0;
-            let totalExpense = 0;
-            
-            let formalIncomeThisMonth = 0;
-            let formalExpenseThisMonth = 0;
-            let grossSubsThisMonth = 0;
+            const [targetYearStr, targetMonthStr] = filterMonth.split('-');
+            const targetYear = parseInt(targetYearStr, 10);
+            const targetMonth = parseInt(targetMonthStr, 10) - 1;
 
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
+            // Determinar mes y año anterior
+            let pMonth = targetMonth - 1;
+            let pYear = targetYear;
+            if (pMonth < 0) {
+                pMonth = 11;
+                pYear -= 1;
+            }
+
+            // Variables Globales
+            let globalIncome = 0;
+            let globalExpense = 0;
+
+            // Variables Mes Anterior
+            let prevMonthIncome = 0;
+            let prevMonthExpense = 0;
+
+            // Variables Mes Seleccionado
+            let monthlyIncome = 0;
+            let monthlyExpense = 0;
+            let monthlySaaSIncome = 0;
+            let monthlyOtherIncome = 0;
 
             cashFlow.forEach(item => {
               const inc = Number(item.income) || 0;
               const exp = Number(item.expense) || 0;
-              
-              totalIncome += inc;
-              totalExpense += exp;
 
               const categoryStr = String(item.category || '');
               const voucherStr = String(item.voucher || '');
 
-              if (inc > 0) {
-                if (categoryStr === 'SaaS (Ingresos)') {
-                  formalIncome += inc;
-                } else if (categoryStr === 'Informal (Ingresos)') {
-                  informalIncome += inc;
-                } else {
-                  if (voucherStr === 'Pendiente / Sin Comprobante' || voucherStr === 'Pendiente') {
-                    informalIncome += inc;
-                  } else {
-                    formalIncome += inc;
-                  }
-                }
-              }
+              // Acumuladores Globales
+              globalIncome += inc;
+              globalExpense += exp;
 
               const d = item.date ? new Date(item.date + 'T00:00:00') : null;
-              if (d && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-                const isFormal = categoryStr === 'SaaS (Ingresos)' || (!categoryStr && voucherStr !== 'Pendiente' && voucherStr !== 'Pendiente / Sin Comprobante');
+              if (d) {
+                const itemMonth = d.getMonth();
+                const itemYear = d.getFullYear();
 
-                if (inc > 0 && isFormal) {
-                  formalIncomeThisMonth += inc;
-                  const conceptStr = String(item.concept || '');
-                  if (conceptStr.toLowerCase().includes('suscrip')) {
-                    grossSubsThisMonth += inc;
+                // Acumuladores Mes Seleccionado
+                if (itemMonth === targetMonth && itemYear === targetYear) {
+                  monthlyIncome += inc;
+                  monthlyExpense += exp;
+
+                  if (inc > 0) {
+                    // Desglose de ingresos (SaaS vs Otros)
+                    if (categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente')) {
+                      monthlySaaSIncome += inc;
+                    } else {
+                      monthlyOtherIncome += inc;
+                    }
                   }
                 }
-                if (exp > 0 && voucherStr === 'Factura') {
-                  formalExpenseThisMonth += exp;
+
+                // Acumuladores Mes Anterior
+                if (itemMonth === pMonth && itemYear === pYear) {
+                    prevMonthIncome += inc;
+                    prevMonthExpense += exp;
                 }
               }
             });
 
-            const netProfit = totalIncome - totalExpense;
+            // CÁLCULOS DE UTILIDAD
+            const globalNetProfit = globalIncome - globalExpense;
+            const prevMonthNetProfit = prevMonthIncome - prevMonthExpense;
+            const netProfit = monthlyIncome - monthlyExpense;
 
-            const baseVentas = formalIncomeThisMonth / 1.18;
-            const igvVentas = formalIncomeThisMonth - baseVentas;
-            
-            const baseCompras = formalExpenseThisMonth / 1.18;
-            const igvCompras = formalExpenseThisMonth - baseCompras;
-
-            const igvAPagar = igvVentas - igvCompras;
-            const rentaMensual = baseVentas * 0.01; 
-            
-            const totalSunat = (igvAPagar > 0 ? igvAPagar : 0) + rentaMensual;
-            const creditoFiscal = igvCompras > igvVentas ? (igvCompras - igvVentas) : 0;
-
-            const subBaseSinIgv = grossSubsThisMonth / 1.18; 
-            const yapeComision = grossSubsThisMonth * 0.0295;
-            const netSubsForJavier = subBaseSinIgv - yapeComision;
-            const javierCommission = netSubsForJavier > 0 ? netSubsForJavier * 0.15 : 0;
-            
+            // SUSCRIPCIONES GLOBALES (Snapshot de hoy, no filtrado por mes)
             const activeSubs = derivedSubscriptions.filter(s => s.status === 'ACTIVO').length;
             const cutSubs = derivedSubscriptions.filter(s => s.status === 'CORTE').length;
             
             return { 
-              totalIncome, formalIncome, informalIncome, totalExpense, netProfit, 
-              activeSubs, cutSubs, javierCommission,
-              totalSunat, creditoFiscal
+              globalNetProfit,
+              prevMonthNetProfit,
+              monthlyIncome, monthlySaaSIncome, monthlyOtherIncome, monthlyExpense, netProfit, 
+              activeSubs, cutSubs
             };
-          }, [cashFlow, derivedSubscriptions]);
+          }, [cashFlow, derivedSubscriptions, filterMonth]);
 
           const sendToGoogleSheets = async (action, payload) => {
             if (!scriptUrl || scriptUrl.trim() === '') return true;
@@ -834,85 +894,84 @@ function doGet(e) {
                 {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
                   <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                    <header>
-                      <h2 className="text-2xl font-bold text-slate-800">Resumen General</h2>
-                      <p className="text-slate-500">Un vistazo rápido a tu negocio hoy.</p>
-                      {!scriptUrl && (
-                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm flex items-start gap-2">
-                            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                            <p><strong>Modo Local:</strong> La base de datos no está conectada. Ve a <b>Configuración</b> para sincronizar con Google Sheets.</p>
-                        </div>
-                      )}
+                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-800">Resumen General</h2>
+                        <p className="text-slate-500">Analiza el rendimiento de tu negocio.</p>
+                        {!scriptUrl && (
+                          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm flex items-start gap-2">
+                              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                              <p><strong>Modo Local:</strong> La base de datos no está conectada. Ve a <b>Configuración</b> para sincronizar con Google Sheets.</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* BOTÓN SELECTOR DE MES */}
+                      <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
+                        <Calendar size={18} className="text-blue-600" />
+                        <input 
+                            type="month" 
+                            value={filterMonth}
+                            onChange={(e) => {
+                              if (e.target.value) setFilterMonth(e.target.value);
+                            }}
+                            className="outline-none border-none bg-transparent text-slate-700 font-bold cursor-pointer"
+                        />
+                      </div>
                     </header>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       
-                      {/* Utilidad Neta (Principal) */}
+                      {/* Utilidad Neta GLOBAL */}
+                      <div className="bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-800 flex flex-col justify-center hover:shadow-md transition-shadow relative overflow-hidden lg:col-span-2">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-blue-500/20 text-blue-400 rounded-xl"><Globe size={24} /></div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Flujo de Caja (Global)</p>
+                            <p className="text-3xl font-bold text-white">S/ {metrics.globalNetProfit.toFixed(2)}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">Saldo acumulado histórico de todo el negocio.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Utilidad Neta (Mes Seleccionado) */}
                       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center hover:shadow-md transition-shadow relative overflow-hidden lg:col-span-2">
                         <div className="flex items-center gap-4">
                           <div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><Wallet size={24} /></div>
                           <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Utilidad Neta Total</p>
+                            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Flujo de Caja ({filterMonth})</p>
                             <p className="text-3xl font-bold text-slate-800">S/ {metrics.netProfit.toFixed(2)}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${metrics.netProfit >= metrics.prevMonthNetProfit ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                 Mes anterior: S/ {metrics.prevMonthNetProfit.toFixed(2)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* TARJETA SUNAT MYPE */}
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden lg:col-span-2">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-rose-100 text-rose-600 rounded-xl"><Landmark size={24} /></div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-500">Estimación SUNAT (Mes actual)</p>
-                            <p className="text-2xl font-bold text-slate-800">S/ {metrics.totalSunat.toFixed(2)}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 pt-2 border-t border-slate-50">
-                          {metrics.creditoFiscal > 0 ? (
-                            <p className="text-[12px] text-emerald-600 font-bold leading-tight">
-                              ¡Tienes S/ {metrics.creditoFiscal.toFixed(2)} de crédito fiscal a favor!
-                            </p>
-                          ) : (
-                            <p className="text-[11px] text-amber-600 font-medium leading-tight">
-                              💡 Tip: Registra más egresos con Factura para generar crédito fiscal y reducir este monto.
-                            </p>
-                          )}
+                      {/* Ingresos (Mes) */}
+                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center gap-1 hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2 text-slate-500"><TrendingUp size={16} className="text-emerald-500"/> <span className="text-xs font-medium">Ingresos del Mes</span></div>
+                        <p className="text-lg font-bold text-slate-800">S/ {metrics.monthlyIncome.toFixed(2)}</p>
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-emerald-600 font-medium" title="Ventas de Suscripciones">SaaS: {metrics.monthlySaaSIncome.toFixed(0)}</span>
+                          <span className="text-amber-600 font-medium" title="Capital, Préstamos y Otros">Otros: {metrics.monthlyOtherIncome.toFixed(0)}</span>
                         </div>
                       </div>
 
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-                        <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><TrendingUp size={24} /></div>
-                        <div className="w-full">
-                          <p className="text-sm font-medium text-slate-500">Ingresos Totales</p>
-                          <p className="text-xl font-bold text-slate-800">S/ {metrics.totalIncome.toFixed(2)}</p>
-                          <div className="flex justify-between items-center mt-1 text-[10px]">
-                            <span className="text-emerald-600 font-medium">Formal: {metrics.formalIncome.toFixed(0)}</span>
-                            <span className="text-amber-600 font-medium">Inf: {metrics.informalIncome.toFixed(0)}</span>
-                          </div>
-                        </div>
+                      {/* Egresos (Mes) */}
+                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center gap-1 hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2 text-slate-500"><TrendingDown size={16} className="text-rose-500"/> <span className="text-xs font-medium">Egresos del Mes</span></div>
+                        <p className="text-lg font-bold text-slate-800">S/ {metrics.monthlyExpense.toFixed(2)}</p>
                       </div>
 
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-                        <div className="p-3 bg-rose-100 text-rose-600 rounded-xl"><TrendingDown size={24} /></div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-500">Egresos Totales</p>
-                          <p className="text-xl font-bold text-slate-800">S/ {metrics.totalExpense.toFixed(2)}</p>
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-                        <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl"><Percent size={24} /></div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-500">Comisión Javier (Mes)</p>
-                          <p className="text-xl font-bold text-slate-800">S/ {metrics.javierCommission.toFixed(2)}</p>
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      {/* Suscripciones Activas */}
+                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow lg:col-span-2">
                         <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><Users size={24} /></div>
                         <div>
                           <p className="text-sm font-medium text-slate-500">Subs. Activas / Corte</p>
-                          <p className="text-xl font-bold text-slate-800">{metrics.activeSubs} <span className="text-slate-400 text-sm font-normal">/ {metrics.cutSubs}</span></p>
+                          <p className="text-2xl font-bold text-slate-800">{metrics.activeSubs} <span className="text-slate-400 text-base font-normal">/ {metrics.cutSubs}</span></p>
                         </div>
                       </div>
 
@@ -924,7 +983,7 @@ function doGet(e) {
                       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow w-full">
                          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                            <TrendingUp className="text-blue-600" size={20} />
-                           Evolución de Utilidad Neta ({new Date().getFullYear()})
+                           Evolución de Utilidad Neta ({filterMonth.split('-')[0]})
                          </h3>
                          <NetProfitChart data={monthlyData} />
                       </div>
@@ -933,7 +992,7 @@ function doGet(e) {
                       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow w-full">
                          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                            <Users className="text-violet-600" size={20} />
-                           Usuarios Activos por Mes ({new Date().getFullYear()})
+                           Usuarios Activos por Mes ({filterMonth.split('-')[0]})
                          </h3>
                          <ActiveUsersChart data={monthlyActiveUsersData} />
                       </div>
@@ -978,8 +1037,8 @@ function doGet(e) {
                                 <td className="p-4">
                                   <p className="text-slate-700">{item.concept}</p>
                                   {item.income > 0 && (
-                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${item.category === 'SaaS (Ingresos)' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                                      {item.category === 'SaaS (Ingresos)' ? 'Formal' : 'Informal'}
+                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600`}>
+                                      {item.category || 'Ingreso'}
                                     </span>
                                   )}
                                 </td>
@@ -1090,7 +1149,7 @@ function doGet(e) {
                          <div className="relative group">
                            <pre className="bg-slate-900 text-slate-300 p-4 rounded-xl text-xs overflow-x-auto border border-slate-700 h-64">
                              <code>{appsScriptCode}</code>
-                           </pre>
+                   </pre>
                            <button 
                              onClick={copyToClipboard}
                              className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors flex items-center gap-2"
