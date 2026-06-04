@@ -43,7 +43,7 @@
         import { 
           LayoutDashboard, Wallet, Users, Plus, TrendingUp, TrendingDown, AlertCircle,
           X, CheckCircle2, Clock, Zap, ExternalLink, Loader2, Settings, Database,
-          RefreshCw, Copy, Calendar, Globe
+          RefreshCw, Copy, Calendar, Globe, Search, Edit2, AlertTriangle, ShieldCheck
         } from 'https://esm.sh/lucide-react@0.263.1';
 
         const initialCashFlow = [];
@@ -75,6 +75,24 @@
     if (action === "saveCashFlow") {
       var sheet = ss.getSheetByName("FlujoDeCaja");
       if(sheet) sheet.appendRow([payload.id, payload.date, payload.client, payload.concept, payload.monto, payload.method, payload.voucher, payload.voucherUrl, payload.notes, payload.category]);
+      return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    } 
+    else if (action === "updateCashFlow") {
+      var sheet = ss.getSheetByName("FlujoDeCaja");
+      if(sheet) {
+        var dataRange = sheet.getDataRange();
+        var values = dataRange.getValues();
+        for (var i = 1; i < values.length; i++) {
+          if (values[i][0] == payload.id) {
+            sheet.getRange(i + 1, 2, 1, 9).setValues([[
+              payload.date, payload.client, payload.concept, payload.monto,
+              payload.method, payload.voucher, payload.voucherUrl, payload.notes, payload.category
+            ]]);
+            break;
+          }
+        }
+      }
       return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -261,21 +279,29 @@ function doGet(e) {
           );
         };
 
-        const ModalCashFlow = ({ onClose, onSave, isSaving }) => {
-          const [type, setType] = useState('ingreso');
-          const [category, setCategory] = useState('Ventas SaaS (Formal)');
-          const [months, setMonths] = useState(1);
-          const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-          const [autoUpdateSub, setAutoUpdateSub] = useState(true);
-          const [voucherType, setVoucherType] = useState('Pendiente / Sin Comprobante');
+        const ModalCashFlow = ({ onClose, onSave, isSaving, initialData }) => {
+          const isEdit = !!initialData;
+          
+          const [type, setType] = useState(isEdit ? (initialData.income > 0 ? 'ingreso' : 'egreso') : 'ingreso');
+          const [category, setCategory] = useState(isEdit ? (initialData.category || 'Ventas SaaS (Formal)') : 'Ventas SaaS (Formal)');
+          
+          let initMonths = 1;
+          if (isEdit && initialData.concept) {
+             const match = initialData.concept.match(/x\s*(\d+)\s*mes/i);
+             if (match) initMonths = parseInt(match[1], 10);
+          }
+          const [months, setMonths] = useState(initMonths);
+          
+          const [date, setDate] = useState(isEdit ? initialData.date : new Date().toISOString().split('T')[0]);
+          const [voucherType, setVoucherType] = useState(isEdit ? (initialData.voucher || 'Pendiente / Sin Comprobante') : 'Pendiente / Sin Comprobante');
           const [promoBienvenida, setPromoBienvenida] = useState(false);
           
-          const [manualConcept, setManualConcept] = useState('');
-          const [manualAmount, setManualAmount] = useState('49.90');
+          const [manualConcept, setManualConcept] = useState(isEdit ? initialData.concept : 'Suscripción x 1 mes');
+          
+          const initAmount = isEdit ? (initialData.income > 0 ? initialData.income : initialData.expense).toString() : '49.90';
+          const [manualAmount, setManualAmount] = useState(initAmount);
 
-          // El concepto se autogenera solo si la categoría es SaaS, de lo contrario usamos el manual
           const isSaasCategory = category === 'Ventas SaaS (Formal)' || category === 'Ventas SaaS (Informal)';
-          const currentConcept = (type === 'ingreso' && isSaasCategory) ? `Suscripción x ${months} mes${months > 1 ? 'es' : ''}` : manualConcept;
 
           const handleTypeChange = (newType) => {
             setType(newType);
@@ -284,6 +310,7 @@ function doGet(e) {
               setMonths(1);
               setPromoBienvenida(false);
               setManualAmount('49.90');
+              setManualConcept('Suscripción x 1 mes');
             } else {
               setCategory('Egresos Generales');
               setManualAmount('');
@@ -295,17 +322,17 @@ function doGet(e) {
             const newCat = e.target.value;
             setCategory(newCat);
             if (type === 'ingreso' && !newCat.includes('SaaS')) {
-               // Si no es SaaS, limpiamos el monto para evitar confusiones
                setManualAmount('');
                setManualConcept('');
             } else if (type === 'ingreso' && newCat.includes('SaaS')) {
-               handleMonthsChange(months); // Recalcular monto
+               handleMonthsChange(months);
             }
           };
 
           const handleMonthsChange = (newMonths) => {
             setMonths(newMonths);
             if (type === 'ingreso' && isSaasCategory) {
+              setManualConcept(`Suscripción x ${newMonths} mes${newMonths > 1 ? 'es' : ''}`);
               if (newMonths === 1) {
                 setManualAmount(promoBienvenida ? '29.90' : '49.90');
               } else if (newMonths === 6) {
@@ -331,9 +358,10 @@ function doGet(e) {
 
             const formData = new FormData(e.target);
             onSave({
+              id: isEdit ? initialData.id : null,
               date: formData.get('date') || date,
               client: formData.get('client') || '',
-              concept: currentConcept,
+              concept: manualConcept,
               category: category,
               income: type === 'ingreso' ? Number(manualAmount) : 0,
               expense: type === 'egreso' ? Number(manualAmount) : 0,
@@ -341,7 +369,6 @@ function doGet(e) {
               voucher: voucherType,
               voucherUrl: formData.get('voucherUrl') || '',
               notes: formData.get('notes') || '',
-              autoUpdateSub: type === 'ingreso' && isSaasCategory && autoUpdateSub,
               months: Number(months)
             });
           };
@@ -351,15 +378,15 @@ function doGet(e) {
               <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[95vh] overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b bg-slate-50 shrink-0">
                   <h3 className="font-semibold text-lg text-slate-800 flex items-center gap-2">
-                    <Wallet className="text-blue-600" size={20} /> Registro de Caja
+                    <Wallet className="text-blue-600" size={20} /> {isEdit ? 'Editar Registro' : 'Registro de Caja'}
                   </h3>
                   <button onClick={onClose} disabled={isSaving} className="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"><X size={20} /></button>
                 </div>
                 
                 <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
                   <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button type="button" onClick={() => handleTypeChange('ingreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'ingreso' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Ingreso</button>
-                    <button type="button" onClick={() => handleTypeChange('egreso')} disabled={isSaving} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'egreso' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Egreso</button>
+                    <button type="button" onClick={() => handleTypeChange('ingreso')} disabled={isSaving || isEdit} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'ingreso' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Ingreso</button>
+                    <button type="button" onClick={() => handleTypeChange('egreso')} disabled={isSaving || isEdit} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'egreso' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Egreso</button>
                   </div>
 
                   <div>
@@ -383,6 +410,7 @@ function doGet(e) {
                           <option value="Marketing y Publicidad">Marketing y Publicidad</option>
                           <option value="Planilla / Honorarios">Planilla / Honorarios</option>
                           <option value="Impuestos">Impuestos</option>
+                          <option value="Comisiones">Comisiones (Bancarias / Ventas)</option>
                           <option value="Egresos Generales">Egresos Generales / Otros</option>
                         </>
                       )}
@@ -396,7 +424,7 @@ function doGet(e) {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Cliente / Referencia</label>
-                      <input required type="text" name="client" placeholder={type === 'ingreso' ? "Ej. 987654321" : "Ej. Facebook Ads..."} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
+                      <input required type="text" name="client" defaultValue={isEdit ? initialData.client : ''} placeholder={type === 'ingreso' ? "Ej. 987654321" : "Ej. Facebook Ads..."} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
                     </div>
                   </div>
 
@@ -435,9 +463,9 @@ function doGet(e) {
                       required 
                       type="text" 
                       name="concept" 
-                      value={currentConcept} 
+                      value={manualConcept} 
                       onChange={(e) => setManualConcept(e.target.value)} 
-                      disabled={(type === 'ingreso' && isSaasCategory) || isSaving} 
+                      disabled={isSaving} 
                       className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" 
                     />
                   </div>
@@ -469,16 +497,14 @@ function doGet(e) {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Método de Pago</label>
-                      <select name="method" disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100">
+                      <select name="method" defaultValue={isEdit ? initialData.method : 'Yape'} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100">
                         <option value="Yape">Yape</option>
                         <option value="Transferencia BCP">Transferencia BCP</option>
                         <option value="Transferencia Interbank">Transferencia Interbank</option>
                         <option value="Efectivo">Efectivo</option>
                       </select>
                     </div>
-                    <div>
-                      {/* Espacio libre para mantener diseño simétrico */}
-                    </div>
+                    <div></div>
                   </div>
 
                   {voucherType !== 'Pendiente / Sin Comprobante' && (
@@ -488,21 +514,21 @@ function doGet(e) {
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                           <ExternalLink size={16} className="text-slate-400" />
                         </div>
-                        <input type="url" name="voucherUrl" placeholder="https://..." disabled={isSaving} className="w-full border rounded-lg py-2 pl-10 pr-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-slate-100" />
+                        <input type="url" name="voucherUrl" defaultValue={isEdit ? initialData.voucherUrl : ''} placeholder="https://..." disabled={isSaving} className="w-full border rounded-lg py-2 pl-10 pr-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-slate-100" />
                       </div>
                     </div>
                   )}
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Notas / Observaciones</label>
-                    <input type="text" name="notes" placeholder="Opcional..." disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" />
+                    <input type="text" name="notes" defaultValue={isEdit ? initialData.notes : ''} placeholder="Opcional..." disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" />
                   </div>
                   
                   <div className="pt-4 border-t flex justify-end gap-2 mt-2">
                     <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50">Cancelar</button>
                     <button type="submit" disabled={isSaving} className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${type === 'ingreso' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} disabled:opacity-75`}>
                       {isSaving ? <Loader2 className="animate-spin" size={18} /> : null}
-                      {isSaving ? 'Guardando...' : `Guardar ${type === 'ingreso' ? 'Ingreso' : 'Egreso'}`}
+                      {isSaving ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Guardar')}
                     </button>
                   </div>
                 </form>
@@ -516,6 +542,8 @@ function doGet(e) {
           const [cashFlow, setCashFlow] = useState(initialCashFlow);
           
           const [showCashFlowModal, setShowCashFlowModal] = useState(false);
+          const [editingRecord, setEditingRecord] = useState(null);
+
           const [notification, setNotification] = useState(null);
           const [isSaving, setIsSaving] = useState(false);
           const [isFetchingData, setIsFetchingData] = useState(false);
@@ -527,6 +555,17 @@ function doGet(e) {
             const d = new Date();
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
           });
+          const [activeFilter, setActiveFilter] = useState(null);
+
+          const [cashFlowSearch, setCashFlowSearch] = useState('');
+          const [cashFlowTypeFilter, setCashFlowTypeFilter] = useState('ALL');
+
+          const [subSearch, setSubSearch] = useState('');
+          const [subFilter, setSubFilter] = useState('ALL');
+
+          useEffect(() => {
+             setActiveFilter(null);
+          }, [filterMonth]);
 
           const showMessage = (msg, type = 'success') => {
             setNotification({ msg, type });
@@ -605,6 +644,17 @@ function doGet(e) {
             }).reverse();
           }, [cashFlow]);
 
+          const displayedCashFlow = useMemo(() => {
+             return cashFlowWithBalance.filter(item => {
+                const term = cashFlowSearch.toLowerCase();
+                const matchesSearch = item.client.toLowerCase().includes(term) || item.concept.toLowerCase().includes(term);
+                const matchesType = cashFlowTypeFilter === 'ALL' || 
+                                    (cashFlowTypeFilter === 'INCOME' && item.income > 0) ||
+                                    (cashFlowTypeFilter === 'EXPENSE' && item.expense > 0);
+                return matchesSearch && matchesType;
+             });
+          }, [cashFlowWithBalance, cashFlowSearch, cashFlowTypeFilter]);
+
           const derivedSubscriptions = useMemo(() => {
             const subsMap = {};
             const sortedCashFlow = [...cashFlow].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -615,9 +665,7 @@ function doGet(e) {
                 const match = conceptStr.match(/x\s*(\d+)\s*mes/i);
                 const months = match ? parseInt(match[1]) : 0;
 
-                // Solo si encontramos meses y es una categoría de SaaS
                 const isSaas = entry.category && entry.category.includes('SaaS');
-                // Respaldo para data antigua sin categoria especifica
                 const wasFormalOrInformalBeforeUpdate = !entry.category && entry.voucher; 
 
                 if (months > 0 && (isSaas || wasFormalOrInformalBeforeUpdate)) {
@@ -648,6 +696,31 @@ function doGet(e) {
               return { ...sub, remainingDays, status };
             }).sort((a, b) => a.remainingDays - b.remainingDays);
           }, [cashFlow]);
+
+          const subMetrics = useMemo(() => {
+             let expired = 0; let warning = 0; let active = 0;
+             derivedSubscriptions.forEach(s => {
+                 if (s.remainingDays < 0) expired++;
+                 else if (s.remainingDays >= 0 && s.remainingDays <= 5) warning++;
+                 else active++;
+             });
+             return { expired, warning, active };
+          }, [derivedSubscriptions]);
+
+          const displayedSubs = useMemo(() => {
+              return derivedSubscriptions.filter(sub => {
+                  const matchesSearch = sub.client.toLowerCase().includes(subSearch.toLowerCase());
+                  let matchesFilter = true;
+                  if (subFilter === 'EXPIRED') matchesFilter = sub.remainingDays < 0;
+                  else if (subFilter === 'WARNING') matchesFilter = sub.remainingDays >= 0 && sub.remainingDays <= 5;
+                  else if (subFilter === 'ACTIVE') matchesFilter = sub.remainingDays > 5;
+                  return matchesSearch && matchesFilter;
+              });
+          }, [derivedSubscriptions, subSearch, subFilter]);
+
+          const toggleSubFilter = (type) => {
+              setSubFilter(prev => prev === type ? 'ALL' : type);
+          };
 
           const monthlyData = useMemo(() => {
             const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -697,13 +770,11 @@ function doGet(e) {
             return data;
           }, [derivedSubscriptions, filterMonth]);
 
-          // CÁLCULOS PRINCIPALES DE MÉTRICAS (GLOBAL, MES ACTUAL, MES ANTERIOR)
           const metrics = useMemo(() => {
             const [targetYearStr, targetMonthStr] = filterMonth.split('-');
             const targetYear = parseInt(targetYearStr, 10);
             const targetMonth = parseInt(targetMonthStr, 10) - 1;
 
-            // Determinar mes y año anterior
             let pMonth = targetMonth - 1;
             let pYear = targetYear;
             if (pMonth < 0) {
@@ -711,19 +782,19 @@ function doGet(e) {
                 pYear -= 1;
             }
 
-            // Variables Globales
             let globalIncome = 0;
             let globalExpense = 0;
 
-            // Variables Mes Anterior
             let prevMonthIncome = 0;
             let prevMonthExpense = 0;
 
-            // Variables Mes Seleccionado
             let monthlyIncome = 0;
             let monthlyExpense = 0;
+            
             let monthlySaaSIncome = 0;
             let monthlyOtherIncome = 0;
+            let monthlyCommissionExpense = 0;
+            let monthlyOtherExpense = 0;
 
             cashFlow.forEach(item => {
               const inc = Number(item.income) || 0;
@@ -732,7 +803,6 @@ function doGet(e) {
               const categoryStr = String(item.category || '');
               const voucherStr = String(item.voucher || '');
 
-              // Acumuladores Globales
               globalIncome += inc;
               globalExpense += exp;
 
@@ -741,22 +811,27 @@ function doGet(e) {
                 const itemMonth = d.getMonth();
                 const itemYear = d.getFullYear();
 
-                // Acumuladores Mes Seleccionado
                 if (itemMonth === targetMonth && itemYear === targetYear) {
                   monthlyIncome += inc;
                   monthlyExpense += exp;
 
                   if (inc > 0) {
-                    // Desglose de ingresos (SaaS vs Otros)
                     if (categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente')) {
                       monthlySaaSIncome += inc;
                     } else {
                       monthlyOtherIncome += inc;
                     }
                   }
+
+                  if (exp > 0) {
+                     if (categoryStr.toLowerCase().includes('comision') || categoryStr.toLowerCase().includes('comisión')) {
+                       monthlyCommissionExpense += exp;
+                     } else {
+                       monthlyOtherExpense += exp;
+                     }
+                  }
                 }
 
-                // Acumuladores Mes Anterior
                 if (itemMonth === pMonth && itemYear === pYear) {
                     prevMonthIncome += inc;
                     prevMonthExpense += exp;
@@ -764,22 +839,51 @@ function doGet(e) {
               }
             });
 
-            // CÁLCULOS DE UTILIDAD
             const globalNetProfit = globalIncome - globalExpense;
             const prevMonthNetProfit = prevMonthIncome - prevMonthExpense;
             const netProfit = monthlyIncome - monthlyExpense;
 
-            // SUSCRIPCIONES GLOBALES (Snapshot de hoy, no filtrado por mes)
-            const activeSubs = derivedSubscriptions.filter(s => s.status === 'ACTIVO').length;
-            const cutSubs = derivedSubscriptions.filter(s => s.status === 'CORTE').length;
-            
             return { 
               globalNetProfit,
               prevMonthNetProfit,
-              monthlyIncome, monthlySaaSIncome, monthlyOtherIncome, monthlyExpense, netProfit, 
-              activeSubs, cutSubs
+              monthlyIncome, monthlySaaSIncome, monthlyOtherIncome, 
+              monthlyExpense, monthlyCommissionExpense, monthlyOtherExpense, 
+              netProfit
             };
-          }, [cashFlow, derivedSubscriptions, filterMonth]);
+          }, [cashFlow, filterMonth]);
+
+          const filteredDetails = useMemo(() => {
+            if (!activeFilter) return [];
+            
+            const [targetYearStr, targetMonthStr] = filterMonth.split('-');
+            const targetYear = parseInt(targetYearStr, 10);
+            const targetMonth = parseInt(targetMonthStr, 10) - 1;
+
+            return cashFlow.filter(item => {
+                const d = item.date ? new Date(item.date + 'T00:00:00') : null;
+                if (!d || d.getMonth() !== targetMonth || d.getFullYear() !== targetYear) return false;
+
+                const inc = Number(item.income) || 0;
+                const exp = Number(item.expense) || 0;
+                const categoryStr = String(item.category || '');
+                const voucherStr = String(item.voucher || '');
+
+                if (activeFilter === 'SAAS_INCOME') {
+                    return inc > 0 && (categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente'));
+                }
+                if (activeFilter === 'OTHER_INCOME') {
+                    return inc > 0 && !(categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente'));
+                }
+                if (activeFilter === 'COMMISSION_EXPENSE') {
+                    return exp > 0 && (categoryStr.toLowerCase().includes('comision') || categoryStr.toLowerCase().includes('comisión'));
+                }
+                if (activeFilter === 'OTHER_EXPENSE') {
+                    return exp > 0 && !(categoryStr.toLowerCase().includes('comision') || categoryStr.toLowerCase().includes('comisión'));
+                }
+                return false;
+            }).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+          }, [cashFlow, filterMonth, activeFilter]);
 
           const sendToGoogleSheets = async (action, payload) => {
             if (!scriptUrl || scriptUrl.trim() === '') return true;
@@ -800,13 +904,24 @@ function doGet(e) {
             }
           };
 
+          const openNewModal = () => {
+             setEditingRecord(null);
+             setShowCashFlowModal(true);
+          };
+
+          const openEditModal = (record) => {
+             setEditingRecord(record);
+             setShowCashFlowModal(true);
+          };
+
           const handleSaveCashFlow = async (data) => {
             setIsSaving(true);
-            const newCashEntryId = Date.now();
+            const isUpdate = !!data.id;
+            const cashEntryId = isUpdate ? data.id : Date.now();
             const montoCashFlow = data.income > 0 ? data.income : -data.expense;
 
             const newCashEntry = { 
-                id: newCashEntryId, 
+                id: cashEntryId, 
                 date: data.date,
                 client: data.client,
                 concept: data.concept,
@@ -820,25 +935,34 @@ function doGet(e) {
                 expense: data.expense || 0
             };
 
-            setCashFlow(prev => [...prev, newCashEntry]);
+            if (isUpdate) {
+                setCashFlow(prev => prev.map(item => item.id === newCashEntry.id ? newCashEntry : item));
+            } else {
+                setCashFlow(prev => [...prev, newCashEntry]);
+            }
             
             if (!scriptUrl || scriptUrl.trim() === '') {
               setIsSaving(false);
               setShowCashFlowModal(false);
-              showMessage(`Guardado localmente. (Configura Sheets para guardado en la nube).`);
+              showMessage(isUpdate ? 'Editado localmente.' : 'Guardado localmente.');
               return;
             }
 
-            const cashFlowSuccess = await sendToGoogleSheets('saveCashFlow', newCashEntry);
+            const action = isUpdate ? 'updateCashFlow' : 'saveCashFlow';
+            const cashFlowSuccess = await sendToGoogleSheets(action, newCashEntry);
             
             setIsSaving(false);
             setShowCashFlowModal(false);
 
             if (cashFlowSuccess) {
-              showMessage(`Sincronizado con Google Sheets correctamente.`);
+              showMessage(isUpdate ? 'Actualizado en Google Sheets.' : 'Sincronizado con Google Sheets.');
             } else {
-              showMessage(`Guardado localmente, pero falló la conexión con Sheets. Revisa la URL.`, 'error');
+              showMessage('Guardado localmente, pero falló la conexión con Sheets.', 'error');
             }
+          };
+
+          const toggleFilter = (filterType) => {
+             setActiveFilter(prev => prev === filterType ? null : filterType);
           };
 
           return (
@@ -859,7 +983,12 @@ function doGet(e) {
               )}
 
               {showCashFlowModal && (
-                <ModalCashFlow onClose={() => setShowCashFlowModal(false)} onSave={handleSaveCashFlow} isSaving={isSaving} />
+                <ModalCashFlow 
+                   onClose={() => setShowCashFlowModal(false)} 
+                   onSave={handleSaveCashFlow} 
+                   isSaving={isSaving} 
+                   initialData={editingRecord}
+                />
               )}
 
               <nav className="w-full md:w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 shadow-xl z-10">
@@ -906,7 +1035,6 @@ function doGet(e) {
                         )}
                       </div>
                       
-                      {/* BOTÓN SELECTOR DE MES */}
                       <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
                         <Calendar size={18} className="text-blue-600" />
                         <input 
@@ -927,9 +1055,9 @@ function doGet(e) {
                         <div className="flex items-center gap-4">
                           <div className="p-3 bg-blue-500/20 text-blue-400 rounded-xl"><Globe size={24} /></div>
                           <div>
-                            <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Flujo de Caja (Global)</p>
+                            <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Utilidad Neta (Global)</p>
                             <p className="text-3xl font-bold text-white">S/ {metrics.globalNetProfit.toFixed(2)}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">Saldo acumulado histórico de todo el negocio.</p>
+                            <p className="text-[10px] text-slate-500 mt-1">Acumulado histórico de todo el negocio.</p>
                           </div>
                         </div>
                       </div>
@@ -939,7 +1067,7 @@ function doGet(e) {
                         <div className="flex items-center gap-4">
                           <div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><Wallet size={24} /></div>
                           <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Flujo de Caja ({filterMonth})</p>
+                            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Utilidad Neta ({filterMonth})</p>
                             <p className="text-3xl font-bold text-slate-800">S/ {metrics.netProfit.toFixed(2)}</p>
                             <div className="flex items-center gap-2 mt-1">
                               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${metrics.netProfit >= metrics.prevMonthNetProfit ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
@@ -950,36 +1078,110 @@ function doGet(e) {
                         </div>
                       </div>
 
-                      {/* Ingresos (Mes) */}
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center gap-1 hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-2 text-slate-500"><TrendingUp size={16} className="text-emerald-500"/> <span className="text-xs font-medium">Ingresos del Mes</span></div>
-                        <p className="text-lg font-bold text-slate-800">S/ {metrics.monthlyIncome.toFixed(2)}</p>
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-emerald-600 font-medium" title="Ventas de Suscripciones">SaaS: {metrics.monthlySaaSIncome.toFixed(0)}</span>
-                          <span className="text-amber-600 font-medium" title="Capital, Préstamos y Otros">Otros: {metrics.monthlyOtherIncome.toFixed(0)}</span>
+                      {/* CLICKABLES */}
+                      
+                      <div 
+                        onClick={() => toggleFilter('SAAS_INCOME')}
+                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'SAAS_INCOME' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 text-slate-500"><TrendingUp size={16} className="text-emerald-500"/> <span className="text-xs font-medium">Ingresos por SaaS</span></div>
+                            <Search size={14} className="text-slate-300" />
                         </div>
+                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlySaaSIncome.toFixed(2)}</p>
                       </div>
 
-                      {/* Egresos (Mes) */}
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center gap-1 hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-2 text-slate-500"><TrendingDown size={16} className="text-rose-500"/> <span className="text-xs font-medium">Egresos del Mes</span></div>
-                        <p className="text-lg font-bold text-slate-800">S/ {metrics.monthlyExpense.toFixed(2)}</p>
+                      <div 
+                        onClick={() => toggleFilter('OTHER_INCOME')}
+                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'OTHER_INCOME' ? 'border-emerald-400 ring-2 ring-emerald-400/20' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 text-slate-500"><TrendingUp size={16} className="text-emerald-400"/> <span className="text-xs font-medium">Otros Ingresos</span></div>
+                            <Search size={14} className="text-slate-300" />
+                        </div>
+                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlyOtherIncome.toFixed(2)}</p>
                       </div>
 
-                      {/* Suscripciones Activas */}
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow lg:col-span-2">
+                      <div 
+                        onClick={() => toggleFilter('COMMISSION_EXPENSE')}
+                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'COMMISSION_EXPENSE' ? 'border-rose-400 ring-2 ring-rose-400/20' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 text-slate-500"><TrendingDown size={16} className="text-rose-400"/> <span className="text-xs font-medium">Egresos por Comisión</span></div>
+                            <Search size={14} className="text-slate-300" />
+                        </div>
+                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlyCommissionExpense.toFixed(2)}</p>
+                      </div>
+
+                      <div 
+                        onClick={() => toggleFilter('OTHER_EXPENSE')}
+                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'OTHER_EXPENSE' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 text-slate-500"><TrendingDown size={16} className="text-rose-500"/> <span className="text-xs font-medium">Otros Egresos</span></div>
+                            <Search size={14} className="text-slate-300" />
+                        </div>
+                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlyOtherExpense.toFixed(2)}</p>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow lg:col-span-4">
                         <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><Users size={24} /></div>
                         <div>
-                          <p className="text-sm font-medium text-slate-500">Subs. Activas / Corte</p>
-                          <p className="text-2xl font-bold text-slate-800">{metrics.activeSubs} <span className="text-slate-400 text-base font-normal">/ {metrics.cutSubs}</span></p>
+                          <p className="text-sm font-medium text-slate-500">Suscripciones Activas vs Corte</p>
+                          {/* Sumamos activas sanas + las que están por vencer (warning) */}
+                          <p className="text-2xl font-bold text-slate-800">{subMetrics.active + subMetrics.warning} <span className="text-slate-400 text-base font-normal">/ {subMetrics.expired}</span></p>
                         </div>
                       </div>
 
                     </div>
 
+                    {/* SECCIÓN DE DETALLES */}
+                    {activeFilter && (
+                      <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6 animate-fade-in">
+                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                          <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                             <Search size={20} className="text-blue-600"/> 
+                             Detalle: {
+                                activeFilter === 'SAAS_INCOME' ? 'Ingresos por Ventas SaaS' : 
+                                activeFilter === 'OTHER_INCOME' ? 'Otros Ingresos' : 
+                                activeFilter === 'COMMISSION_EXPENSE' ? 'Egresos por Comisiones' : 'Otros Egresos'
+                             } ({filterMonth})
+                          </h3>
+                          <button onClick={() => setActiveFilter(null)} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"><X size={20}/></button>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                          <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_#e2e8f0]">
+                              <tr className="text-slate-500">
+                                <th className="p-3 font-semibold">Fecha</th>
+                                <th className="p-3 font-semibold">Cliente/Ref</th>
+                                <th className="p-3 font-semibold">Categoría</th>
+                                <th className="p-3 font-semibold">Concepto</th>
+                                <th className="p-3 font-semibold text-right">Monto</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                               {filteredDetails.length > 0 ? filteredDetails.map(item => (
+                                  <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50">
+                                     <td className="p-3 text-slate-600">{item.date}</td>
+                                     <td className="p-3 font-medium text-slate-800">{item.client}</td>
+                                     <td className="p-3 text-xs text-slate-500">{item.category || '-'}</td>
+                                     <td className="p-3 text-slate-600 max-w-[200px] truncate" title={item.concept}>{item.concept}</td>
+                                     <td className={`p-3 font-bold text-right ${item.income > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        {item.income > 0 ? `+ S/ ${Number(item.income).toFixed(2)}` : `- S/ ${Number(item.expense).toFixed(2)}`}
+                                     </td>
+                                  </tr>
+                               )) : (
+                                  <tr><td colSpan="5" className="p-6 text-center text-slate-500">No hay movimientos en esta categoría.</td></tr>
+                               )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 gap-6">
-                      
-                      {/* Gráfica 1: Utilidad Neta */}
                       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow w-full">
                          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                            <TrendingUp className="text-blue-600" size={20} />
@@ -988,7 +1190,6 @@ function doGet(e) {
                          <NetProfitChart data={monthlyData} />
                       </div>
 
-                      {/* Gráfica 2: Usuarios Activos */}
                       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow w-full">
                          <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                            <Users className="text-violet-600" size={20} />
@@ -996,9 +1197,7 @@ function doGet(e) {
                          </h3>
                          <ActiveUsersChart data={monthlyActiveUsersData} />
                       </div>
-
                     </div>
-
                   </div>
                 )}
 
@@ -1010,10 +1209,33 @@ function doGet(e) {
                         <h2 className="text-2xl font-bold text-slate-800">Flujo de Caja</h2>
                         <p className="text-slate-500">Tus registros financieros detallados.</p>
                       </div>
-                      <button onClick={() => setShowCashFlowModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-sm hover:shadow-md">
+                      <button onClick={openNewModal} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-sm hover:shadow-md shrink-0">
                         <Plus size={20} /> Nuevo Movimiento
                       </button>
                     </header>
+
+                    {/* FILTROS FLUJO DE CAJA */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input 
+                           type="text" 
+                           placeholder="Buscar por cliente o concepto..." 
+                           value={cashFlowSearch}
+                           onChange={e => setCashFlowSearch(e.target.value)}
+                           className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow hover:shadow-sm" 
+                        />
+                      </div>
+                      <select 
+                         value={cashFlowTypeFilter} 
+                         onChange={e => setCashFlowTypeFilter(e.target.value)} 
+                         className="border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:shadow-sm transition-shadow text-slate-700 font-medium"
+                      >
+                        <option value="ALL">Todos los Tipos</option>
+                        <option value="INCOME">Solo Ingresos</option>
+                        <option value="EXPENSE">Solo Egresos</option>
+                      </select>
+                    </div>
 
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                       <div className="overflow-x-auto">
@@ -1021,26 +1243,24 @@ function doGet(e) {
                           <thead>
                             <tr className="bg-slate-50 text-slate-600 border-b">
                               <th className="p-4 font-semibold">Fecha</th>
-                              <th className="p-4 font-semibold">Cliente / Proveedor</th>
-                              <th className="p-4 font-semibold">Concepto / Tipo</th>
+                              <th className="p-4 font-semibold">Cliente / Referencia</th>
+                              <th className="p-4 font-semibold">Concepto</th>
                               <th className="p-4 font-semibold">Monto</th>
                               <th className="p-4 font-semibold">Medio</th>
                               <th className="p-4 font-semibold">Comprobante</th>
-                              <th className="p-4 font-semibold">Notas</th>
+                              <th className="p-4 font-semibold text-center">Acciones</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {cashFlowWithBalance.map((item) => (
+                            {displayedCashFlow.map((item) => (
                               <tr key={item.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                 <td className="p-4 text-slate-600">{item.date}</td>
                                 <td className="p-4 font-semibold text-blue-600">{item.client}</td>
                                 <td className="p-4">
-                                  <p className="text-slate-700">{item.concept}</p>
-                                  {item.income > 0 && (
-                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600`}>
-                                      {item.category || 'Ingreso'}
-                                    </span>
-                                  )}
+                                  <p className="text-slate-700 max-w-[200px] truncate" title={item.concept}>{item.concept}</p>
+                                  <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${item.income > 0 ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600'}`}>
+                                    {item.category || '-'}
+                                  </span>
                                 </td>
                                 <td className={`p-4 font-bold ${item.income > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                   {item.income > 0 ? `+ S/ ${item.income.toFixed(2)}` : `- S/ ${item.expense.toFixed(2)}`}
@@ -1058,12 +1278,16 @@ function doGet(e) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="p-4 text-slate-500 max-w-[150px] truncate" title={item.notes}>{item.notes || '-'}</td>
+                                <td className="p-4 text-center">
+                                  <button onClick={() => openEditModal(item)} className="p-2 bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors" title="Editar registro">
+                                    <Edit2 size={16} />
+                                  </button>
+                                </td>
                               </tr>
                             ))}
-                            {cashFlowWithBalance.length === 0 && (
+                            {displayedCashFlow.length === 0 && (
                               <tr><td colSpan="7" className="p-8 text-center text-slate-500">
-                                {isFetchingData ? 'Cargando datos...' : 'No hay registros de caja.'}
+                                {isFetchingData ? 'Cargando datos...' : 'No se encontraron registros de caja.'}
                               </td></tr>
                             )}
                           </tbody>
@@ -1079,9 +1303,40 @@ function doGet(e) {
                     <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div>
                         <h2 className="text-2xl font-bold text-slate-800">Suscripciones Generadas</h2>
-                        <p className="text-slate-500">Se calculan en tiempo real en base a los ingresos de Caja.</p>
+                        <p className="text-slate-500">Control de renovaciones basado en caja.</p>
                       </div>
                     </header>
+
+                    {/* TARJETAS DE ESTADO DE SUSCRIPCIONES */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                        <div onClick={() => toggleSubFilter('ACTIVE')} className={`p-5 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1 ${subFilter === 'ACTIVE' ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-400/20' : 'bg-white border-slate-200 hover:border-emerald-300'}`}>
+                            <div className="flex justify-between items-center"><span className="text-emerald-600 font-bold tracking-wide">Activos</span><ShieldCheck size={24} className="text-emerald-500"/></div>
+                            <p className="text-4xl font-bold text-slate-800 mt-3">{subMetrics.active}</p>
+                            <p className="text-xs text-slate-500 mt-1 font-medium">Sanos (&gt; 5 días)</p>
+                        </div>
+                        <div onClick={() => toggleSubFilter('WARNING')} className={`p-5 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1 ${subFilter === 'WARNING' ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-400/20' : 'bg-white border-slate-200 hover:border-amber-300'}`}>
+                            <div className="flex justify-between items-center"><span className="text-amber-600 font-bold tracking-wide">Por Vencer</span><Clock size={24} className="text-amber-500"/></div>
+                            <p className="text-4xl font-bold text-slate-800 mt-3">{subMetrics.warning}</p>
+                            <p className="text-xs text-slate-500 mt-1 font-medium">En riesgo (0 a 5 días)</p>
+                        </div>
+                        <div onClick={() => toggleSubFilter('EXPIRED')} className={`p-5 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1 ${subFilter === 'EXPIRED' ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-400/20' : 'bg-white border-slate-200 hover:border-rose-300'}`}>
+                            <div className="flex justify-between items-center"><span className="text-rose-600 font-bold tracking-wide">Vencidos</span><AlertTriangle size={24} className="text-rose-500"/></div>
+                            <p className="text-4xl font-bold text-slate-800 mt-3">{subMetrics.expired}</p>
+                            <p className="text-xs text-slate-500 mt-1 font-medium">Corte de servicio (&lt; 0 días)</p>
+                        </div>
+                    </div>
+
+                    {/* FILTRO TEXTUAL SUSCRIPCIONES */}
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input 
+                         type="text" 
+                         placeholder="Buscar suscripción por nombre de cliente o teléfono..." 
+                         value={subSearch}
+                         onChange={e => setSubSearch(e.target.value)}
+                         className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow hover:shadow-sm" 
+                      />
+                    </div>
 
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                       <div className="overflow-x-auto">
@@ -1096,7 +1351,7 @@ function doGet(e) {
                             </tr>
                           </thead>
                           <tbody>
-                            {derivedSubscriptions.map((sub) => (
+                            {displayedSubs.map((sub) => (
                               <tr key={sub.client} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                 <td className="p-4 font-bold text-slate-800">{sub.client}</td>
                                 <td className="p-4 text-slate-600">{sub.endDate}</td>
@@ -1108,17 +1363,17 @@ function doGet(e) {
                                 </td>
                                 <td className="p-4">
                                   <span className={`px-3 py-1 rounded-lg text-xs font-bold tracking-wide ${
-                                    sub.status === 'ACTIVO' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                    sub.remainingDays < 0 ? 'bg-rose-100 text-rose-700' : sub.remainingDays <= 5 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
                                   }`}>
-                                    {sub.status}
+                                    {sub.remainingDays < 0 ? 'CORTE' : sub.remainingDays <= 5 ? 'RENOVAR' : 'ACTIVO'}
                                   </span>
                                 </td>
                                 <td className="p-4 text-center font-medium text-slate-600">{sub.activeMonths}</td>
                               </tr>
                             ))}
-                            {derivedSubscriptions.length === 0 && (
+                            {displayedSubs.length === 0 && (
                               <tr><td colSpan="5" className="p-8 text-center text-slate-500">
-                                {isFetchingData ? 'Cargando datos...' : 'No hay suscripciones calculadas.'}
+                                {isFetchingData ? 'Cargando datos...' : 'No se encontraron suscripciones con este filtro.'}
                               </td></tr>
                             )}
                           </tbody>
@@ -1144,12 +1399,12 @@ function doGet(e) {
                            1. Código para Google Apps Script
                          </h3>
                          <p className="text-slate-600 mb-4 text-sm">
-                           Cópialo y haz clic en <i>Implementar &gt; Administrar implementaciones &gt; Editar &gt; Nueva versión &gt; Implementar</i>.
+                           Cópialo y haz clic en <span className="font-semibold text-rose-600">Implementar &gt; Administrar implementaciones &gt; Editar &gt; Nueva versión &gt; Implementar</span>.
                          </p>
                          <div className="relative group">
                            <pre className="bg-slate-900 text-slate-300 p-4 rounded-xl text-xs overflow-x-auto border border-slate-700 h-64">
                              <code>{appsScriptCode}</code>
-                   </pre>
+                           </pre>
                            <button 
                              onClick={copyToClipboard}
                              className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors flex items-center gap-2"
