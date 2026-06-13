@@ -3,20 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Convertidor Libro Diario Simplificado</title>
+    <title>Convertidor Libro Diario Simplificado PLE</title>
+    
     <!-- Tailwind CSS para los estilos modernos -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <!-- SheetJS para lectura y escritura de archivos Excel en el navegador -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
     <!-- Phosphor Icons para iconografía -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
         }
-        /* Custom scrollbar para la tabla de vista previa */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -36,200 +39,189 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <!-- Notificaciones flotantes (reemplazo de alert) -->
+    <!-- Contenedor de notificaciones (Toasts) -->
     <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
 
-    <!-- Contenedor Principal -->
-    <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full overflow-hidden border border-gray-100">
+    <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden border border-gray-100">
         
-        <!-- Encabezado -->
-        <div class="bg-blue-600 px-8 py-6 text-white flex items-center gap-4">
-            <i class="ph ph-books text-4xl"></i>
+        <!-- Cabecera -->
+        <div class="bg-gray-900 px-6 py-6 md:px-8 text-white flex items-center gap-4">
+            <i class="ph ph-books text-4xl text-blue-400"></i>
             <div>
-                <h1 class="text-2xl font-bold">Generador de Libro Diario Simplificado</h1>
-                <p class="text-blue-100 text-sm mt-1">Convierte tu flujo de caja interno al formato oficial 5.2 de SUNAT</p>
+                <h1 class="text-xl md:text-2xl font-bold">Flujo de Trabajo: Libro Diario Simplificado</h1>
+                <p class="text-gray-400 text-sm mt-1">Automatiza tu contabilidad para el PLE (Formato 5.2) de SUNAT en 2 sencillos pasos.</p>
             </div>
         </div>
 
-        <!-- Cuerpo del formulario -->
-        <div class="p-8">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <!-- RUC -->
+        <div class="p-6 md:p-8">
+            <!-- Formulario de Credenciales -->
+            <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">RUC de la Empresa</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">RUC de la Empresa</label>
                     <div class="relative">
                         <i class="ph ph-identification-card absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
-                        <input type="text" id="ruc-input" maxlength="11" placeholder="Ej: 20123456789" class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        <input type="text" id="ruc-input" maxlength="11" placeholder="Ej: 20123456789" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-mono">
                     </div>
                 </div>
-                <!-- Periodo -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Periodo (Año y Mes)</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Periodo (Año y Mes)</label>
                     <div class="relative">
                         <i class="ph ph-calendar-blank absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
-                        <input type="text" id="period-input" maxlength="6" placeholder="Ej: 202603" class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        <input type="text" id="period-input" maxlength="6" placeholder="Ej: 202603" class="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-mono">
                     </div>
                 </div>
             </div>
 
-            <!-- Subida de Archivo -->
-            <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:bg-gray-50 transition cursor-pointer mb-8 relative">
-                <input type="file" id="file-upload" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                <i class="ph ph-file-xls text-5xl text-green-500 mb-3"></i>
-                <h3 class="text-lg font-medium text-gray-800">Sube tu Excel interno aquí</h3>
-                <p class="text-gray-500 text-sm mt-1">Arrastra el archivo o haz clic para seleccionar</p>
-                <p class="text-xs text-gray-400 mt-4" id="file-name-display">Ningún archivo seleccionado</p>
-            </div>
-
-            <!-- Panel de Resultados (Oculto por defecto) -->
-            <div id="results-panel" class="hidden">
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3 text-green-700">
-                        <i class="ph-fill ph-check-circle text-2xl"></i>
-                        <div>
-                            <p class="font-medium">¡Archivo procesado con éxito!</p>
-                            <p class="text-sm text-green-600" id="record-count">0 operaciones detectadas</p>
-                        </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- PASO 1 -->
+                <div class="flex flex-col h-full">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md">1</span>
+                        <h2 class="text-lg font-bold text-gray-800">Generar Plantilla Excel</h2>
                     </div>
-                </div>
+                    <p class="text-sm text-gray-600 mb-4">Sube tu flujo de caja interno. El sistema calculará la partida doble automáticamente.</p>
+                    
+                    <div id="drop-zone-1" class="flex-1 border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl p-8 text-center hover:bg-blue-50 transition cursor-pointer relative mb-4 flex flex-col items-center justify-center min-h-[200px]">
+                        <input type="file" id="file-upload-1" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <i class="ph ph-file-arrow-up text-5xl text-blue-500 mb-2"></i>
+                        <h3 class="font-medium text-gray-800">Sube tu Flujo de Caja</h3>
+                        <p class="text-xs text-gray-500 mt-1">Excel o CSV</p>
+                        <p class="text-sm text-blue-600 font-medium mt-3 hidden break-all" id="file-name-display-1"></p>
+                    </div>
 
-                <div class="flex flex-col sm:flex-row gap-4">
-                    <button onclick="downloadExcel()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-green-200">
-                        <i class="ph ph-file-xls text-xl"></i>
-                        Descargar Plantilla Excel
+                    <button id="btn-download-excel" onclick="downloadExcel()" disabled class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-blue-200 disabled:shadow-none">
+                        <i class="ph ph-microsoft-excel-logo text-xl"></i>
+                        Descargar Plantilla
                     </button>
-                    <button onclick="downloadTXT()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-blue-200">
+                </div>
+
+                <!-- PASO 2 -->
+                <div class="flex flex-col h-full">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="bg-green-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md">2</span>
+                        <h2 class="text-lg font-bold text-gray-800">Generar TXT para PLE</h2>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">Sube la plantilla de Excel que revisaste. Generaremos el archivo TXT listo para SUNAT.</p>
+                    
+                    <div id="drop-zone-2" class="flex-1 border-2 border-dashed border-green-200 bg-green-50/50 rounded-xl p-8 text-center hover:bg-green-50 transition cursor-pointer relative mb-4 flex flex-col items-center justify-center min-h-[200px]">
+                        <input type="file" id="file-upload-2" accept=".xlsx, .xls" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <i class="ph ph-file-code text-5xl text-green-500 mb-2"></i>
+                        <h3 class="font-medium text-gray-800">Sube la Plantilla Revisada</h3>
+                        <p class="text-xs text-gray-500 mt-1">Formato 13 columnas</p>
+                        <p class="text-sm text-green-600 font-medium mt-3 hidden break-all" id="file-name-display-2"></p>
+                    </div>
+
+                    <button id="btn-download-txt" onclick="downloadTXT()" disabled class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-green-200 disabled:shadow-none">
                         <i class="ph ph-file-text text-xl"></i>
-                        Descargar TXT SUNAT
+                        Descargar TXT Oficial
                     </button>
                 </div>
+
             </div>
         </div>
     </div>
 
     <script>
-        // Variables globales para almacenar los datos procesados
         let transformedDataArray = [];
+        let templateDataArray = [];
         let globalRUC = "";
         let globalPeriod = "";
 
         // UI Elements
-        const fileInput = document.getElementById('file-upload');
-        const fileNameDisplay = document.getElementById('file-name-display');
-        const resultsPanel = document.getElementById('results-panel');
         const rucInput = document.getElementById('ruc-input');
         const periodInput = document.getElementById('period-input');
-        const dropZone = document.getElementById('drop-zone');
+        
+        const dropZone1 = document.getElementById('drop-zone-1');
+        const fileInput1 = document.getElementById('file-upload-1');
+        const fileNameDisplay1 = document.getElementById('file-name-display-1');
+        const btnDownloadExcel = document.getElementById('btn-download-excel');
 
-        // Sistema de notificaciones (reemplazo de alert)
+        const dropZone2 = document.getElementById('drop-zone-2');
+        const fileInput2 = document.getElementById('file-upload-2');
+        const fileNameDisplay2 = document.getElementById('file-name-display-2');
+        const btnDownloadTxt = document.getElementById('btn-download-txt');
+
+        // Sistema de notificaciones
         function showToast(message, type = 'error') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            
             const bgColor = type === 'error' ? 'bg-red-500' : 'bg-green-500';
             const icon = type === 'error' ? 'ph-warning-circle' : 'ph-check-circle';
 
-            toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-x-full opacity-0`;
-            toast.innerHTML = `
-                <i class="ph ${icon} text-xl"></i>
-                <span class="font-medium">${message}</span>
-            `;
-
+            toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-x-full opacity-0 max-w-sm`;
+            toast.innerHTML = `<i class="ph ${icon} text-2xl flex-shrink-0"></i><span class="font-medium text-sm">${message}</span>`;
             container.appendChild(toast);
 
-            // Animate in
+            // Animar entrada
             requestAnimationFrame(() => {
                 toast.classList.remove('translate-x-full', 'opacity-0');
             });
 
-            // Remove after 4 seconds
+            // Remover después de 4 segundos
             setTimeout(() => {
                 toast.classList.add('translate-x-full', 'opacity-0');
                 setTimeout(() => toast.remove(), 300);
             }, 4000);
         }
 
-        // Efectos del Dropzone
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, highlight, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, unhighlight, false);
-        });
-
-        function highlight(e) {
-            dropZone.classList.add('border-blue-500', 'bg-blue-50');
-        }
-
-        function unhighlight(e) {
-            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
-        }
-
-        // Manejo de la carga del archivo
-        fileInput.addEventListener('change', handleFile);
-        dropZone.addEventListener('drop', handleDrop);
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files.length) {
-                fileInput.files = files;
-                handleFile({ target: fileInput });
+        // Validación de credenciales
+        function validateCredentials() {
+            const ruc = rucInput.value.trim();
+            const periodo = periodInput.value.trim();
+            if (ruc.length !== 11 || isNaN(ruc)) {
+                showToast("Ingresa un RUC válido de 11 dígitos.", "error");
+                return false;
             }
+            if (periodo.length !== 6 || isNaN(periodo)) {
+                showToast("Ingresa un periodo válido (Ej: 202603).", "error");
+                return false;
+            }
+            globalRUC = ruc;
+            globalPeriod = periodo + "00"; // SUNAT requiere que el periodo termine en 00 para libros mensuales
+            return true;
         }
 
-        function handleFile(e) {
+        // Configuración de Drag & Drop
+        function setupDropZone(dropZone, fileInput, handler) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
+            });
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('border-current', 'opacity-70', 'scale-[1.02]'), false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-current', 'opacity-70', 'scale-[1.02]'), false);
+            });
+            dropZone.addEventListener('drop', e => {
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handler({ target: fileInput });
+                }
+            });
+            fileInput.addEventListener('change', handler);
+        }
+
+        // Lógica Paso 1: Procesar Excel/CSV de Flujo de Caja
+        function handleFile1(e) {
+            if(!validateCredentials()) { e.target.value = ''; return; }
             const file = e.target.files[0];
             if (!file) return;
 
-            // Validaciones de formulario
-            const ruc = rucInput.value.trim();
-            const periodo = periodInput.value.trim();
-
-            if (ruc.length !== 11 || isNaN(ruc)) {
-                showToast("Por favor, ingresa un RUC válido de 11 dígitos.", "error");
-                fileInput.value = "";
-                return;
-            }
-            if (periodo.length !== 6 || isNaN(periodo)) {
-                showToast("Por favor, ingresa un periodo válido (Ej: 202603).", "error");
-                fileInput.value = "";
-                return;
-            }
-
-            globalRUC = ruc;
-            globalPeriod = periodo + "00"; // SUNAT requiere 8 dígitos para el periodo en la columna (AAAAMM00)
-
-            fileNameDisplay.textContent = file.name;
-            fileNameDisplay.classList.remove('text-gray-400');
-            fileNameDisplay.classList.add('text-blue-600', 'font-medium');
+            fileNameDisplay1.textContent = "Cargado: " + file.name;
+            fileNameDisplay1.classList.remove('hidden');
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function(evt) {
                 try {
-                    const data = new Uint8Array(e.target.result);
+                    const data = new Uint8Array(evt.target.result);
                     const workbook = XLSX.read(data, {type: 'array', cellDates: true});
-                    
-                    // Asumimos que los datos están en la primera hoja
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    
-                    // Convertir a JSON
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                     const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
                     
                     transformDataToDiario(jsonRows);
                 } catch (error) {
-                    showToast("Error al leer el Excel. Verifica que no esté corrupto.", "error");
+                    showToast("Error al leer el archivo. Verifica que sea un Excel válido.", "error");
                     console.error(error);
                 }
             };
@@ -242,148 +234,185 @@
             let validRecords = 0;
 
             rows.forEach(row => {
-                // Adaptabilidad: Buscar columnas sin importar mayúsculas
+                // Función auxiliar para encontrar columnas sin importar mayúsculas/minúsculas
                 const getVal = (keyMatch) => {
                     const key = Object.keys(row).find(k => k.toLowerCase().includes(keyMatch));
                     return key ? row[key] : "";
                 };
 
                 let monto = parseFloat(getVal('monto'));
-                if (isNaN(monto) || monto <= 0) return; // Ignorar filas sin montos válidos
+                if (isNaN(monto) || monto <= 0) return; // Saltar filas sin montos válidos
 
                 validRecords++;
 
-                // Formateo de fecha
+                // Formatear Fecha robustamente
                 let fechaRaw = getVal('fecha');
-                let fechaFormateada = "";
+                let fechaFormateada = "01/01/2000";
                 if (fechaRaw instanceof Date) {
                     fechaFormateada = `${String(fechaRaw.getDate()).padStart(2, '0')}/${String(fechaRaw.getMonth() + 1).padStart(2, '0')}/${fechaRaw.getFullYear()}`;
-                } else if (typeof fechaRaw === 'string') {
-                    // Intento de parseo de string dd/mm/yyyy o yyyy-mm-dd
+                } else if (typeof fechaRaw === 'string' && fechaRaw.trim() !== '') {
                     if(fechaRaw.includes('T')) fechaRaw = fechaRaw.split('T')[0];
                     let parts = fechaRaw.includes('-') ? fechaRaw.split('-') : fechaRaw.split('/');
                     if(parts.length === 3) {
-                        if(parts[0].length === 4) fechaFormateada = `${parts[2]}/${parts[1]}/${parts[0]}`; // yyyy-mm-dd
-                        else fechaFormateada = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`; // dd/mm/yyyy
-                    } else {
-                        fechaFormateada = "01/01/2000"; // fallback
+                        // Interpreta si viene como yyyy-mm-dd o dd/mm/yyyy
+                        fechaFormateada = parts[0].length === 4 ? `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}` : `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
                     }
-                } else {
-                    fechaFormateada = "01/01/2000";
                 }
 
-                const cliente = String(getVal('cliente'));
-                const concepto = String(getVal('concepto')).substring(0, 100) || "Ingreso";
-                const numComprobante = String(getVal('# documento') || getVal('comprobante') || "000000");
-
-                // Logica Documento Identidad
+                const cliente = String(getVal('cliente')).trim();
+                const concepto = String(getVal('concepto')).trim().substring(0, 100) || "Ingreso";
                 const tipoDocIdent = (cliente.length === 11 && !isNaN(cliente)) ? "6" : "1";
                 const numDocIdent = (!isNaN(cliente) && cliente.length > 0) ? cliente : "00000000";
 
-                // Calculo de impuestos (Asumiendo que el Monto total incluye IGV)
                 const baseImponible = parseFloat((monto / 1.18).toFixed(2));
                 const igv = parseFloat((monto - baseImponible).toFixed(2));
-
-                // CUO de Venta
+                
                 const cuoVenta = `VTA${String(cuoCounter).padStart(4, '0')}`;
-                const serie = "B001"; // Default para boletas/ventas generales
                 const correlativoDoc = String(cuoCounter).padStart(6, '0');
 
-                // Asiento 1: Cuenta por cobrar (12)
-                transformedDataArray.push([globalPeriod, cuoVenta, "M0001", "1212", tipoDocIdent, numDocIdent, "03", serie, correlativoDoc, fechaFormateada, concepto, monto.toFixed(2), "0.00"]);
-                // Asiento 2: Tributos por pagar (40)
-                transformedDataArray.push([globalPeriod, cuoVenta, "M0002", "40111", tipoDocIdent, numDocIdent, "03", serie, correlativoDoc, fechaFormateada, concepto, "0.00", igv.toFixed(2)]);
-                // Asiento 3: Ingresos/Ventas (70)
-                transformedDataArray.push([globalPeriod, cuoVenta, "M0003", "7032", tipoDocIdent, numDocIdent, "03", serie, correlativoDoc, fechaFormateada, concepto, "0.00", baseImponible.toFixed(2)]);
+                // Asiento 1: Provisión de Venta (12 al Debe, 40 y 70 al Haber)
+                transformedDataArray.push([globalPeriod, cuoVenta, "M0001", "1212", tipoDocIdent, numDocIdent, "03", "B001", correlativoDoc, fechaFormateada, concepto, monto.toFixed(2), "0.00"]);
+                transformedDataArray.push([globalPeriod, cuoVenta, "M0002", "40111", tipoDocIdent, numDocIdent, "03", "B001", correlativoDoc, fechaFormateada, concepto, "0.00", igv.toFixed(2)]);
+                transformedDataArray.push([globalPeriod, cuoVenta, "M0003", "7032", tipoDocIdent, numDocIdent, "03", "B001", correlativoDoc, fechaFormateada, concepto, "0.00", baseImponible.toFixed(2)]);
 
-                // CUO de Cobranza (Ingreso al banco/caja)
+                // Asiento 2: Cobro (10 al Debe, 12 al Haber)
                 const cuoCobro = `COB${String(cuoCounter).padStart(4, '0')}`;
-                
-                // Asiento 4: Ingreso a Caja/Bancos (10)
                 transformedDataArray.push([globalPeriod, cuoCobro, "M0001", "1041", tipoDocIdent, numDocIdent, "00", "0", "0", fechaFormateada, `Cobro - ${concepto}`, monto.toFixed(2), "0.00"]);
-                // Asiento 5: Cancelación de cuenta por cobrar (12)
                 transformedDataArray.push([globalPeriod, cuoCobro, "M0002", "1212", tipoDocIdent, numDocIdent, "00", "0", "0", fechaFormateada, `Cobro - ${concepto}`, "0.00", monto.toFixed(2)]);
 
                 cuoCounter++;
             });
 
-            if (validRecords === 0) {
-                showToast("No se encontraron registros con montos válidos.", "error");
-                return;
+            if (validRecords > 0) {
+                btnDownloadExcel.disabled = false;
+                showToast(`Se procesaron ${validRecords} operaciones. Plantilla lista para descargar.`, "success");
+            } else {
+                showToast("No se detectaron montos válidos en la columna 'monto'. Verifica tu archivo.", "error");
             }
-
-            document.getElementById('record-count').textContent = `${validRecords} operaciones convertidas a ${transformedDataArray.length} asientos contables.`;
-            resultsPanel.classList.remove('hidden');
-            showToast("Procesamiento completado", "success");
         }
 
         function downloadExcel() {
             if(transformedDataArray.length === 0) return;
-
-            const headers = [
-                "Periodo", "CUO", "Correlativo", "Cuenta_Contable", "Tipo_Doc_Ident", 
-                "Num_Doc_Ident", "Tipo_Comprobante", "Serie", "Numero", "Fecha", 
-                "Glosa", "Debe", "Haber"
-            ];
-
+            const headers = ["Periodo", "CUO", "Correlativo", "Cuenta_Contable", "Tipo_Doc_Ident", "Num_Doc_Ident", "Tipo_Comprobante", "Serie", "Numero", "Fecha", "Glosa", "Debe", "Haber"];
+            
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet([headers, ...transformedDataArray]);
             
-            // Auto ajustar ancho de columnas (básico)
-            const wscols = headers.map(h => ({wch: Math.max(h.length, 12)}));
-            ws['!cols'] = wscols;
-
+            // Ajustar anchos de columna para mejor visualización
+            ws['!cols'] = headers.map(h => ({wch: Math.max(h.length, 14)}));
+            
             XLSX.utils.book_append_sheet(wb, ws, "Libro_Diario_Simp");
             XLSX.writeFile(wb, `Plantilla_Diario_${globalPeriod.substring(0,6)}.xlsx`);
+            showToast("Plantilla descargada. Revísala y súbela en el Paso 2.", "success");
+        }
+
+        // Lógica Paso 2: Generar TXT para PLE a partir de la plantilla revisada
+        function handleFile2(e) {
+            if(!validateCredentials()) { e.target.value = ''; return; }
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileNameDisplay2.textContent = "Cargado: " + file.name;
+            fileNameDisplay2.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: true, dateNF: 'dd/mm/yyyy'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    templateDataArray = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    
+                    if (templateDataArray.length > 0) {
+                        btnDownloadTxt.disabled = false;
+                        showToast(`Plantilla cargada. ${templateDataArray.length} asientos listos para generar TXT.`, "success");
+                    }
+                } catch (error) {
+                    showToast("Error al leer la plantilla revisada.", "error");
+                    console.error(error);
+                }
+            };
+            reader.readAsArrayBuffer(file);
         }
 
         function downloadTXT() {
-            if(transformedDataArray.length === 0) return;
-
+            if(templateDataArray.length === 0) return;
             let txtContent = "";
 
-            transformedDataArray.forEach(row => {
-                // Mapear los 13 campos a la estructura de 21 campos del formato 5.2
-                const col1 = row[0]; // Periodo
-                const col2 = row[1]; // CUO
-                const col3 = row[2]; // Correlativo (M0001)
-                const col4 = row[3]; // Cuenta
-                const col5 = ""; // Cod Unidad Operacion
-                const col6 = ""; // Cod Centro Costos
-                const col7 = "PEN"; // Moneda
-                const col8 = row[4]; // Tipo Doc Ident
-                const col9 = row[5]; // Num Doc Ident
-                const col10 = String(row[6]).padStart(2, '0'); // Tipo Comprobante
-                const col11 = row[7]; // Serie
-                const col12 = row[8]; // Numero Comp
-                const col13 = row[9]; // Fecha contable
-                const col14 = ""; // Fecha Vencimiento
-                const col15 = row[9]; // Fecha Emision
-                const col16 = row[10]; // Glosa
-                const col17 = ""; // Glosa referencial
-                const col18 = row[11]; // Debe (ya viene con 2 decimales string)
-                const col19 = row[12]; // Haber (ya viene con 2 decimales string)
-                const col20 = ""; // Dato estructurado
-                const col21 = "1"; // Estado Operacion
+            templateDataArray.forEach(row => {
+                const getVal = (keyMatch) => {
+                    const key = Object.keys(row).find(k => k.toLowerCase().includes(keyMatch));
+                    return key ? row[key] : "";
+                };
 
+                const col1 = String(getVal('periodo')).trim();
+                const col2 = String(getVal('cuo')).trim();
+                
+                // Evitar filas vacías al final del excel
+                if (!col1 || !col2) return; 
+
+                const col3 = String(getVal('correlativo')).trim();
+                const col4 = String(getVal('cuenta')).trim();
+                const col5 = ""; // Unidad de Operacion (Opcional)
+                const col6 = ""; // Centro de Costos (Opcional)
+                const col7 = "PEN"; // Moneda
+                const col8 = String(getVal('tipo_doc_ident')).trim();
+                const col9 = String(getVal('num_doc_ident')).trim();
+                
+                let tipoComp = String(getVal('tipo_comprobante')).trim();
+                const col10 = tipoComp ? tipoComp.padStart(2, '0') : ""; 
+                
+                const col11 = String(getVal('serie')).trim();
+                const col12 = String(getVal('numero')).trim();
+                
+                // Procesamiento robusto de fechas para TXT
+                let fechaRaw = getVal('fecha');
+                let col13 = "";
+                if (fechaRaw instanceof Date) {
+                    col13 = `${String(fechaRaw.getDate()).padStart(2, '0')}/${String(fechaRaw.getMonth() + 1).padStart(2, '0')}/${fechaRaw.getFullYear()}`;
+                } else if(typeof fechaRaw === 'number') {
+                    // Si SheetJS devuelve el serial de Excel
+                    const dateObj = XLSX.SSF.parse_date_code(fechaRaw);
+                    col13 = `${String(dateObj.d).padStart(2, '0')}/${String(dateObj.m).padStart(2, '0')}/${dateObj.y}`;
+                } else {
+                    col13 = String(fechaRaw).trim(); 
+                }
+                
+                const col14 = ""; // Fecha de Vencimiento
+                const col15 = col13; // Fecha de Emisión 
+                const col16 = String(getVal('glosa')).trim().substring(0, 100); 
+                const col17 = ""; // Glosa referencial
+                
+                let debeNum = parseFloat(getVal('debe'));
+                let haberNum = parseFloat(getVal('haber'));
+                const col18 = !isNaN(debeNum) ? debeNum.toFixed(2) : "0.00"; 
+                const col19 = !isNaN(haberNum) ? haberNum.toFixed(2) : "0.00"; 
+                
+                const col20 = ""; // Dato estructurado
+                const col21 = "1"; // Estado de la operación
+
+                // Generación de línea (PLE finaliza con un pipe extra)
                 const line = [col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, ""].join("|");
                 txtContent += line + "\n";
             });
 
-            // Nombre Oficial SUNAT: LE + RUC + YYYYMM00 + 050200 + 00 + 1 + 1 + 1 + 1
+            // Nombre oficial PLE: LE + RUC + AÑO_MES + 00 + FORMATO(050200) + 00 + 1 + 1 + 1 + 1
             const fileName = `LE${globalRUC}${globalPeriod.substring(0,6)}00050200001111.txt`;
-
-            // Crear y descargar archivo
-            const blob = new Blob([txtContent], { type: 'text/plain;charset=latin-1' });
+            
+            // Asegurar que use la codificación correcta
+            const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
             const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", fileName);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
             link.click();
-            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            
+            showToast("Archivo TXT generado con éxito. Listo para el validador de SUNAT.", "success");
         }
+
+        // Inicializar zonas de carga
+        setupDropZone(dropZone1, fileInput1, handleFile1);
+        setupDropZone(dropZone2, fileInput2, handleFile2);
     </script>
 </body>
 </html>
