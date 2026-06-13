@@ -3,1477 +3,387 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GestorPro - LATAM5S</title>
-    
+    <title>Convertidor Libro Diario Simplificado</title>
+    <!-- Tailwind CSS para los estilos modernos -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
+    <!-- SheetJS para lectura y escritura de archivos Excel en el navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Phosphor Icons para iconografía -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <style>
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
         }
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out forwards;
-        }
-        
+        /* Custom scrollbar para la tabla de vista previa */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #f1f5f9; 
+            background: #f1f1f1; 
+            border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
+            background: #c1c1c1; 
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
+            background: #a8a8a8; 
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans">
-    
-    <div id="root"></div>
+<body class="min-h-screen flex items-center justify-center p-4">
 
-    <script type="text/babel" data-type="module">
-        import React, { useState, useMemo, useEffect } from 'https://esm.sh/react@18.2.0';
-        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
-        import { 
-          LayoutDashboard, Wallet, Users, Plus, TrendingUp, TrendingDown, AlertCircle,
-          X, CheckCircle2, Clock, Zap, ExternalLink, Loader2, Settings, Database,
-          RefreshCw, Copy, Calendar, Globe, Search, Edit2, AlertTriangle, ShieldCheck
-        } from 'https://esm.sh/lucide-react@0.263.1';
+    <!-- Notificaciones flotantes (reemplazo de alert) -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
 
-        const initialCashFlow = [];
-
-        const addMonthsToDate = (dateStr, months) => {
-          const date = new Date(dateStr + 'T00:00:00'); 
-          date.setMonth(date.getMonth() + Number(months));
-          return date.toISOString().split('T')[0];
-        };
-
-        const calculateSubStatus = (endDateStr) => {
-            const today = new Date();
-            const endDate = new Date(endDateStr + 'T00:00:00');
-            const diffTime = endDate - today;
-            const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return {
-                remainingDays,
-                status: remainingDays < 0 ? 'CORTE' : 'ACTIVO'
-            };
-        };
-
-        const appsScriptCode = `function doPost(e) {
-  try {
-    var data = JSON.parse(e.postData.contents);
-    var action = data.action;
-    var payload = data.payload;
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    if (action === "saveCashFlow") {
-      var sheet = ss.getSheetByName("FlujoDeCaja");
-      if(sheet) sheet.appendRow([payload.id, payload.date, payload.client, payload.concept, payload.monto, payload.method, payload.voucher, payload.voucherUrl, payload.notes, payload.category]);
-      return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
-        .setMimeType(ContentService.MimeType.JSON);
-    } 
-    else if (action === "updateCashFlow") {
-      var sheet = ss.getSheetByName("FlujoDeCaja");
-      if(sheet) {
-        var dataRange = sheet.getDataRange();
-        var values = dataRange.getValues();
-        for (var i = 1; i < values.length; i++) {
-          if (values[i][0] == payload.id) {
-            sheet.getRange(i + 1, 2, 1, 9).setValues([[
-              payload.date, payload.client, payload.concept, payload.monto,
-              payload.method, payload.voucher, payload.voucherUrl, payload.notes, payload.category
-            ]]);
-            break;
-          }
-        }
-      }
-      return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "error", "msg": error.message}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doGet(e) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var response = { cashFlow: [] };
-
-    var sheetCaja = ss.getSheetByName("FlujoDeCaja");
-    if (sheetCaja) {
-      var dataCaja = sheetCaja.getDataRange().getValues();
-      dataCaja.shift();
-      response.cashFlow = dataCaja.map(function(row) {
-        return { 
-          id: row[0], 
-          date: row[1] instanceof Date ? row[1].toISOString() : row[1], 
-          client: row[2], 
-          concept: row[3], 
-          monto: row[4], 
-          method: row[5], 
-          voucher: row[6], 
-          voucherUrl: row[7], 
-          notes: row[8],
-          category: row[9]
-        };
-      });
-    }
-
-    return ContentService.createTextOutput(JSON.stringify(response))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "error", "msg": error.message}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`;
-
-        const NetProfitChart = ({ data }) => {
-          const chartHeight = 280;
-          const chartWidth = 800;
-          const paddingX = 65;
-          const paddingY = 50; 
-          const innerHeight = chartHeight - paddingY * 2;
-          const innerWidth = chartWidth - paddingX * 2;
-
-          const minNet = Math.min(...data.map(d => d.net), 0); 
-          const maxNet = Math.max(...data.map(d => d.net), 100); 
-          const rangeNet = maxNet - minNet || 1;
-
-          const getYNet = (val) => chartHeight - paddingY - ((val - minNet) / rangeNet) * innerHeight;
-          const getX = (index) => paddingX + (index * (innerWidth / (data.length - 1)));
-
-          const zeroY = getYNet(0);
-
-          const pathNet = `M ${data.map((d, i) => `${getX(i)},${getYNet(d.net)}`).join(' L ')}`;
-          const areaNet = `${pathNet} L ${getX(data.length - 1)},${zeroY} L ${getX(0)},${zeroY} Z`;
-
-          return (
-            <div className="w-full overflow-x-auto pb-2 relative">
-              <div className="min-w-[650px] relative select-none">
-                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto font-sans overflow-visible">
-                  <defs>
-                    <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-
-                  {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
-                     const val = minNet + (rangeNet * ratio);
-                     const y = getYNet(val);
-                     return (
-                       <g key={`l-${ratio}`}>
-                         <line x1={paddingX} y1={y} x2={chartWidth - paddingX} y2={y} stroke="#f1f5f9" strokeWidth="1.5" strokeDasharray={val === 0 ? "0" : "4"} />
-                         <text x={paddingX - 10} y={y + 4} fontSize="11" fill="#64748b" textAnchor="end" fontWeight="500">
-                           {val >= 0 ? `S/ ${Math.round(val)}` : `-S/ ${Math.abs(Math.round(val))}`}
-                         </text>
-                       </g>
-                     )
-                  })}
-
-                  <path d={areaNet} fill="url(#netGradient)" />
-                  <line x1={paddingX} y1={zeroY} x2={chartWidth - paddingX} y2={zeroY} stroke="#cbd5e1" strokeWidth="2" />
-                  <path d={pathNet} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  
-                  {data.map((d, i) => {
-                    const x = getX(i);
-                    return (
-                      <g key={i}>
-                        <text x={x} y={chartHeight - 15} fontSize="12" fill="#64748b" textAnchor="middle" fontWeight="500">
-                          {d.month}
-                        </text>
-                        <text x={x} y={getYNet(d.net) - 12} fontSize="11" fill={d.net >= 0 ? "#3b82f6" : "#f43f5e"} textAnchor="middle" fontWeight="bold">
-                          {d.net >= 0 ? `S/ ${d.net.toFixed(0)}` : `-S/ ${Math.abs(d.net).toFixed(0)}`}
-                        </text>
-                        <circle cx={x} cy={getYNet(d.net)} r="5" fill="#ffffff" stroke="#3b82f6" strokeWidth="2" />
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-              <div className="flex justify-center gap-8 mt-6">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div><span className="text-sm font-bold text-slate-800">Utilidad Neta</span></div>
-              </div>
+    <!-- Contenedor Principal -->
+    <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full overflow-hidden border border-gray-100">
+        
+        <!-- Encabezado -->
+        <div class="bg-blue-600 px-8 py-6 text-white flex items-center gap-4">
+            <i class="ph ph-books text-4xl"></i>
+            <div>
+                <h1 class="text-2xl font-bold">Generador de Libro Diario Simplificado</h1>
+                <p class="text-blue-100 text-sm mt-1">Convierte tu flujo de caja interno al formato oficial 5.2 de SUNAT</p>
             </div>
-          );
-        };
+        </div>
 
-        const ActiveUsersChart = ({ data }) => {
-          const chartHeight = 280;
-          const chartWidth = 800;
-          const paddingX = 40;
-          const paddingY = 50; 
-          const innerHeight = chartHeight - paddingY * 2;
-          const innerWidth = chartWidth - paddingX * 2;
-
-          const minUsers = 0; 
-          const maxUsers = Math.max(...data.map(d => d.activeUsers), 10); 
-          const rangeUsers = maxUsers - minUsers || 1;
-
-          const getYUsers = (val) => chartHeight - paddingY - ((val - minUsers) / rangeUsers) * innerHeight;
-          const getX = (index) => paddingX + (index * (innerWidth / (data.length - 1)));
-
-          const zeroY = getYUsers(0);
-
-          const pathUsers = `M ${data.map((d, i) => `${getX(i)},${getYUsers(d.activeUsers)}`).join(' L ')}`;
-          const areaUsers = `${pathUsers} L ${getX(data.length - 1)},${zeroY} L ${getX(0)},${zeroY} Z`;
-
-          return (
-            <div className="w-full overflow-x-auto pb-2 relative">
-              <div className="min-w-[650px] relative select-none">
-                
-                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto font-sans overflow-visible">
-                  <defs>
-                    <linearGradient id="usersGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.2" />
-                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-
-                  {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
-                     const val = minUsers + (rangeUsers * ratio);
-                     const y = getYUsers(val);
-                     return (
-                       <g key={`l-${ratio}`}>
-                         <line x1={paddingX} y1={y} x2={chartWidth - paddingX} y2={y} stroke="#f1f5f9" strokeWidth="1.5" strokeDasharray={val === 0 ? "0" : "4"} />
-                         <text x={paddingX - 10} y={y + 4} fontSize="11" fill="#64748b" textAnchor="end" fontWeight="500">
-                           {Math.round(val)}
-                         </text>
-                       </g>
-                     )
-                  })}
-
-                  <path d={areaUsers} fill="url(#usersGradient)" />
-                  <line x1={paddingX} y1={zeroY} x2={chartWidth - paddingX} y2={zeroY} stroke="#cbd5e1" strokeWidth="2" />
-                  <path d={pathUsers} fill="none" stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  
-                  {data.map((d, i) => {
-                    const x = getX(i);
-                    
-                    return (
-                      <g key={i}>
-                        <text x={x} y={chartHeight - 15} fontSize="12" fill="#64748b" textAnchor="middle" fontWeight="500">
-                          {d.month}
-                        </text>
-                        <text x={x} y={getYUsers(d.activeUsers) - 12} fontSize="11" fill="#8b5cf6" textAnchor="middle" fontWeight="bold">
-                          {d.activeUsers}
-                        </text>
-                        <circle cx={x} cy={getYUsers(d.activeUsers)} r="5" fill="#ffffff" stroke="#8b5cf6" strokeWidth="2" />
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-              <div className="flex justify-center gap-8 mt-6">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-violet-500 shadow-sm"></div><span className="text-sm font-bold text-slate-800">Usuarios Activos</span></div>
-              </div>
+        <!-- Cuerpo del formulario -->
+        <div class="p-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- RUC -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">RUC de la Empresa</label>
+                    <div class="relative">
+                        <i class="ph ph-identification-card absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                        <input type="text" id="ruc-input" maxlength="11" placeholder="Ej: 20123456789" class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                    </div>
+                </div>
+                <!-- Periodo -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Periodo (Año y Mes)</label>
+                    <div class="relative">
+                        <i class="ph ph-calendar-blank absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                        <input type="text" id="period-input" maxlength="6" placeholder="Ej: 202603" class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                    </div>
+                </div>
             </div>
-          );
-        };
 
-        const ModalCashFlow = ({ onClose, onSave, isSaving, initialData }) => {
-          const isEdit = !!initialData;
-          
-          const [type, setType] = useState(isEdit ? (initialData.income > 0 ? 'ingreso' : 'egreso') : 'ingreso');
-          const [category, setCategory] = useState(isEdit ? (initialData.category || 'Ventas SaaS (Formal)') : 'Ventas SaaS (Formal)');
-          
-          let initMonths = 1;
-          if (isEdit && initialData.concept) {
-             const match = initialData.concept.match(/x\s*(\d+)\s*mes/i);
-             if (match) initMonths = parseInt(match[1], 10);
-          }
-          const [months, setMonths] = useState(initMonths);
-          
-          const [date, setDate] = useState(isEdit ? initialData.date : new Date().toISOString().split('T')[0]);
-          const [voucherType, setVoucherType] = useState(isEdit ? (initialData.voucher || 'Pendiente / Sin Comprobante') : 'Pendiente / Sin Comprobante');
-          const [promoBienvenida, setPromoBienvenida] = useState(false);
-          
-          const [manualConcept, setManualConcept] = useState(isEdit ? initialData.concept : 'Suscripción x 1 mes');
-          
-          const initAmount = isEdit ? (initialData.income > 0 ? initialData.income : initialData.expense).toString() : '49.90';
-          const [manualAmount, setManualAmount] = useState(initAmount);
-
-          const isSaasCategory = category === 'Ventas SaaS (Formal)' || category === 'Ventas SaaS (Informal)';
-
-          const handleTypeChange = (newType) => {
-            setType(newType);
-            if (newType === 'ingreso') {
-              setCategory('Ventas SaaS (Formal)');
-              setMonths(1);
-              setPromoBienvenida(false);
-              setManualAmount('49.90');
-              setManualConcept('Suscripción x 1 mes');
-            } else {
-              setCategory('Egresos Generales');
-              setManualAmount('');
-              setManualConcept('');
-            }
-          };
-
-          const handleCategoryChange = (e) => {
-            const newCat = e.target.value;
-            setCategory(newCat);
-            if (type === 'ingreso' && !newCat.includes('SaaS')) {
-               setManualAmount('');
-               setManualConcept('');
-            } else if (type === 'ingreso' && newCat.includes('SaaS')) {
-               handleMonthsChange(months);
-            }
-          };
-
-          const handleMonthsChange = (newMonths) => {
-            setMonths(newMonths);
-            if (type === 'ingreso' && isSaasCategory) {
-              setManualConcept(`Suscripción x ${newMonths} mes${newMonths > 1 ? 'es' : ''}`);
-              if (newMonths === 1) {
-                setManualAmount(promoBienvenida ? '29.90' : '49.90');
-              } else if (newMonths === 6) {
-                setManualAmount('269.90'); 
-              } else if (newMonths === 12) {
-                setManualAmount('499.90'); 
-              } else {
-                setManualAmount((49.90 * newMonths).toFixed(2)); 
-              }
-            }
-          };
-
-          const handlePromoChange = (isPromo) => {
-            setPromoBienvenida(isPromo);
-            if (type === 'ingreso' && months === 1 && isSaasCategory) {
-              setManualAmount(isPromo ? '29.90' : '49.90');
-            }
-          };
-
-          const handleSubmit = (e) => {
-            e.preventDefault();
-            if (isSaving) return;
-
-            const formData = new FormData(e.target);
-            onSave({
-              id: isEdit ? initialData.id : null,
-              date: formData.get('date') || date,
-              client: formData.get('client') || '',
-              concept: manualConcept,
-              category: category,
-              income: type === 'ingreso' ? Number(manualAmount) : 0,
-              expense: type === 'egreso' ? Number(manualAmount) : 0,
-              method: formData.get('method') || 'Yape',
-              voucher: voucherType,
-              voucherUrl: formData.get('voucherUrl') || '',
-              notes: formData.get('notes') || '',
-              months: Number(months)
-            });
-          };
-
-          return (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[95vh] overflow-hidden">
-                <div className="flex justify-between items-center p-4 border-b bg-slate-50 shrink-0">
-                  <h3 className="font-semibold text-lg text-slate-800 flex items-center gap-2">
-                    <Wallet className="text-blue-600" size={20} /> {isEdit ? 'Editar Registro' : 'Registro de Caja'}
-                  </h3>
-                  <button onClick={onClose} disabled={isSaving} className="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"><X size={20} /></button>
-                </div>
-                
-                <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
-                  <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button type="button" onClick={() => handleTypeChange('ingreso')} disabled={isSaving || isEdit} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'ingreso' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Ingreso</button>
-                    <button type="button" onClick={() => handleTypeChange('egreso')} disabled={isSaving || isEdit} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === 'egreso' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'} disabled:opacity-50`}>Egreso</button>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
-                    <select value={category} onChange={handleCategoryChange} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 font-medium">
-                      {type === 'ingreso' ? (
-                        <>
-                          <optgroup label="Suscripciones (Activan servicio)">
-                            <option value="Ventas SaaS (Formal)">Ventas SaaS (Formales)</option>
-                            <option value="Ventas SaaS (Informal)">Ventas SaaS (Informales)</option>
-                          </optgroup>
-                          <optgroup label="Otros Ingresos (No activan servicio)">
-                            <option value="Capital Inicial">Capital Inicial</option>
-                            <option value="Préstamo de Socios">Préstamo de Socios</option>
-                            <option value="Otros Ingresos">Otros Ingresos</option>
-                          </optgroup>
-                        </>
-                      ) : (
-                        <>
-                          <option value="Servidores / APIs">Servidores / APIs</option>
-                          <option value="Marketing y Publicidad">Marketing y Publicidad</option>
-                          <option value="Planilla / Honorarios">Planilla / Honorarios</option>
-                          <option value="Impuestos">Impuestos</option>
-                          <option value="Comisiones">Comisiones (Bancarias / Ventas)</option>
-                          <option value="Egresos Generales">Egresos Generales / Otros</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
-                      <input required type="date" name="date" value={date} onChange={e => setDate(e.target.value)} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Cliente / Referencia</label>
-                      <input required type="text" name="client" defaultValue={isEdit ? initialData.client : ''} placeholder={type === 'ingreso' ? "Ej. 987654321" : "Ej. Facebook Ads..."} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100" />
-                    </div>
-                  </div>
-
-                  {type === 'ingreso' && isSaasCategory && (
-                    <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                          <Zap size={16} className="text-amber-500 fill-amber-500" />
-                          Meses a pagar
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => handleMonthsChange(Math.max(1, months - 1))} disabled={isSaving} className="w-8 h-8 rounded-full bg-white text-blue-600 shadow-sm font-bold border hover:bg-blue-100 disabled:opacity-50">-</button>
-                          <span className="w-4 text-center font-bold text-slate-700">{months}</span>
-                          <button type="button" onClick={() => handleMonthsChange(months + 1)} disabled={isSaving} className="w-8 h-8 rounded-full bg-white text-blue-600 shadow-sm font-bold border hover:bg-blue-100 disabled:opacity-50">+</button>
-                        </div>
-                      </div>
-                      
-                      {months === 1 && (
-                        <label className="flex items-center gap-2 cursor-pointer group animate-fade-in">
-                          <input type="checkbox" checked={promoBienvenida} onChange={e => handlePromoChange(e.target.checked)} disabled={isSaving} className="w-4 h-4 text-blue-600 rounded border-blue-300 focus:ring-blue-500 disabled:opacity-50" />
-                          <span className="text-sm font-bold text-blue-800 leading-tight">
-                            Promo Bienvenida (S/ 29.90)
-                          </span>
-                        </label>
-                      )}
-
-                      <p className="text-xs text-blue-800 leading-tight border-t border-blue-200/50 pt-2 mt-2">
-                        El sistema detectará que dice <b>"x {months} mes"</b> y extenderá la suscripción automáticamente.
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Concepto</label>
-                    <input 
-                      required 
-                      type="text" 
-                      name="concept" 
-                      value={manualConcept} 
-                      onChange={(e) => setManualConcept(e.target.value)} 
-                      disabled={isSaving} 
-                      className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" 
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Monto (S/)</label>
-                      <input 
-                        required 
-                        type="number" 
-                        step="0.01" 
-                        name="amount" 
-                        value={manualAmount} 
-                        onChange={(e) => setManualAmount(e.target.value)} 
-                        disabled={isSaving} 
-                        className={`w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none font-bold ${type === 'ingreso' ? 'text-emerald-600' : 'text-rose-600'} disabled:bg-slate-100`} 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Comprobante</label>
-                      <select name="voucher" value={voucherType} onChange={(e) => setVoucherType(e.target.value)} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100">
-                        <option>Pendiente / Sin Comprobante</option>
-                        <option>Boleta</option>
-                        <option>Factura</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Método de Pago</label>
-                      <select name="method" defaultValue={isEdit ? initialData.method : 'Yape'} disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100">
-                        <option value="Yape">Yape</option>
-                        <option value="Transferencia BCP">Transferencia BCP</option>
-                        <option value="Transferencia Interbank">Transferencia Interbank</option>
-                        <option value="Efectivo">Efectivo</option>
-                      </select>
-                    </div>
-                    <div></div>
-                  </div>
-
-                  {voucherType !== 'Pendiente / Sin Comprobante' && (
-                    <div className="animate-fade-in">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">URL del Comprobante</label>
-                      <div className="flex relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <ExternalLink size={16} className="text-slate-400" />
-                        </div>
-                        <input type="url" name="voucherUrl" defaultValue={isEdit ? initialData.voucherUrl : ''} placeholder="https://..." disabled={isSaving} className="w-full border rounded-lg py-2 pl-10 pr-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-slate-100" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Notas / Observaciones</label>
-                    <input type="text" name="notes" defaultValue={isEdit ? initialData.notes : ''} placeholder="Opcional..." disabled={isSaving} className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 disabled:bg-slate-100" />
-                  </div>
-                  
-                  <div className="pt-4 border-t flex justify-end gap-2 mt-2">
-                    <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50">Cancelar</button>
-                    <button type="submit" disabled={isSaving} className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${type === 'ingreso' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'} disabled:opacity-75`}>
-                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : null}
-                      {isSaving ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Guardar')}
-                    </button>
-                  </div>
-                </form>
-              </div>
+            <!-- Subida de Archivo -->
+            <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:bg-gray-50 transition cursor-pointer mb-8 relative">
+                <input type="file" id="file-upload" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <i class="ph ph-file-xls text-5xl text-green-500 mb-3"></i>
+                <h3 class="text-lg font-medium text-gray-800">Sube tu Excel interno aquí</h3>
+                <p class="text-gray-500 text-sm mt-1">Arrastra el archivo o haz clic para seleccionar</p>
+                <p class="text-xs text-gray-400 mt-4" id="file-name-display">Ningún archivo seleccionado</p>
             </div>
-          );
-        };
 
-        function App() {
-          const [activeTab, setActiveTab] = useState('dashboard');
-          const [cashFlow, setCashFlow] = useState(initialCashFlow);
-          
-          const [showCashFlowModal, setShowCashFlowModal] = useState(false);
-          const [editingRecord, setEditingRecord] = useState(null);
-
-          const [notification, setNotification] = useState(null);
-          const [isSaving, setIsSaving] = useState(false);
-          const [isFetchingData, setIsFetchingData] = useState(false);
-          
-          const [scriptUrl, setScriptUrl] = useState('');
-          const [tempScriptUrl, setTempScriptUrl] = useState('');
-
-          const [filterMonth, setFilterMonth] = useState(() => {
-            const d = new Date();
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          });
-          const [activeFilter, setActiveFilter] = useState(null);
-
-          const [cashFlowSearch, setCashFlowSearch] = useState('');
-          const [cashFlowTypeFilter, setCashFlowTypeFilter] = useState('ALL');
-
-          const [subSearch, setSubSearch] = useState('');
-          const [subFilter, setSubFilter] = useState('ALL');
-
-          useEffect(() => {
-             setActiveFilter(null);
-          }, [filterMonth]);
-
-          const showMessage = (msg, type = 'success') => {
-            setNotification({ msg, type });
-            setTimeout(() => setNotification(null), 4000);
-          };
-
-          const copyToClipboard = () => {
-            navigator.clipboard.writeText(appsScriptCode);
-            showMessage('Código copiado al portapapeles. Pégalo en Apps Script.');
-          };
-
-          const loadDataFromSheets = async (url) => {
-            if (!url) return;
-            setIsFetchingData(true);
-            
-            try {
-              const response = await fetch(url);
-              if (!response.ok) throw new Error("La URL de Google Apps Script no devolvió una respuesta válida.");
-              const data = await response.json();
-              if (data.status === "error") throw new Error(data.msg || "Error interno en Google Apps Script");
-
-              if (data.cashFlow) {
-                const parsedCashFlow = data.cashFlow.map(item => {
-                  const monto = Number(item.monto) || 0;
-                  return {
-                    id: item.id || Date.now() + Math.random(),
-                    date: item.date ? String(item.date).split('T')[0] : '',
-                    client: String(item.client || ''),
-                    concept: String(item.concept || ''),
-                    category: item.category || (item.voucher === 'Pendiente / Sin Comprobante' || item.voucher === 'Pendiente' ? 'Informal (Ingresos)' : 'SaaS (Ingresos)'),
-                    income: monto > 0 ? monto : 0,
-                    expense: monto < 0 ? Math.abs(monto) : 0,
-                    method: String(item.method || ''),
-                    voucher: String(item.voucher || ''),
-                    voucherUrl: item.voucherUrl || '',
-                    notes: item.notes || ''
-                  };
-                });
-                setCashFlow(parsedCashFlow);
-              }
-              showMessage('Base de datos sincronizada correctamente.', 'success');
-            } catch (error) {
-              console.error("Error al cargar datos:", error);
-              showMessage('Error de conexión. Asegúrate de actualizar el código en Apps Script e Implementar una Nueva Versión.', 'error');
-            } finally {
-              setIsFetchingData(false);
-            }
-          };
-
-          useEffect(() => {
-            const savedUrl = localStorage.getItem('gestorpro_script_url') || '';
-            setScriptUrl(savedUrl);
-            setTempScriptUrl(savedUrl);
-            if (savedUrl) {
-               loadDataFromSheets(savedUrl);
-            }
-          }, []);
-
-          const handleSaveConfig = () => {
-            setScriptUrl(tempScriptUrl);
-            localStorage.setItem('gestorpro_script_url', tempScriptUrl);
-            if (tempScriptUrl) {
-              loadDataFromSheets(tempScriptUrl);
-            } else {
-              showMessage('URL desconectada. Modo local activado.');
-              setCashFlow([]);
-            }
-          };
-
-          const cashFlowWithBalance = useMemo(() => {
-            let currentBalance = 0;
-            const sorted = [...cashFlow].sort((a, b) => new Date(a.date) - new Date(b.date));
-            return sorted.map(item => {
-              currentBalance += (Number(item.income) || 0) - (Number(item.expense) || 0);
-              return { ...item, balance: currentBalance };
-            }).reverse();
-          }, [cashFlow]);
-
-          const displayedCashFlow = useMemo(() => {
-             return cashFlowWithBalance.filter(item => {
-                const term = cashFlowSearch.toLowerCase();
-                const matchesSearch = item.client.toLowerCase().includes(term) || item.concept.toLowerCase().includes(term);
-                const matchesType = cashFlowTypeFilter === 'ALL' || 
-                                    (cashFlowTypeFilter === 'INCOME' && item.income > 0) ||
-                                    (cashFlowTypeFilter === 'EXPENSE' && item.expense > 0);
-                return matchesSearch && matchesType;
-             });
-          }, [cashFlowWithBalance, cashFlowSearch, cashFlowTypeFilter]);
-
-          const derivedSubscriptions = useMemo(() => {
-            const subsMap = {};
-            const sortedCashFlow = [...cashFlow].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            sortedCashFlow.forEach(entry => {
-              if (entry.income > 0 && entry.client) {
-                const conceptStr = String(entry.concept || '');
-                const match = conceptStr.match(/x\s*(\d+)\s*mes/i);
-                const months = match ? parseInt(match[1]) : 0;
-
-                const isSaas = entry.category && entry.category.includes('SaaS');
-                const wasFormalOrInformalBeforeUpdate = !entry.category && entry.voucher; 
-
-                if (months > 0 && (isSaas || wasFormalOrInformalBeforeUpdate)) {
-                  if (!subsMap[entry.client]) {
-                    subsMap[entry.client] = {
-                      client: entry.client,
-                      startDate: entry.date,
-                      endDate: addMonthsToDate(entry.date, months),
-                      activeMonths: months,
-                      notes: entry.notes || ''
-                    };
-                  } else {
-                    const existing = subsMap[entry.client];
-                    const baseDate = new Date(existing.endDate) > new Date(entry.date) ? existing.endDate : entry.date;
-                    subsMap[entry.client] = {
-                      ...existing,
-                      endDate: addMonthsToDate(baseDate, months),
-                      activeMonths: existing.activeMonths + months,
-                      notes: entry.notes ? entry.notes : existing.notes 
-                    };
-                  }
-                }
-              }
-            });
-
-            return Object.values(subsMap).map(sub => {
-              const { remainingDays, status } = calculateSubStatus(sub.endDate);
-              return { ...sub, remainingDays, status };
-            }).sort((a, b) => a.remainingDays - b.remainingDays);
-          }, [cashFlow]);
-
-          const subMetrics = useMemo(() => {
-             let expired = 0; let warning = 0; let active = 0;
-             derivedSubscriptions.forEach(s => {
-                 if (s.remainingDays < 0) expired++;
-                 else if (s.remainingDays >= 0 && s.remainingDays <= 5) warning++;
-                 else active++;
-             });
-             return { expired, warning, active };
-          }, [derivedSubscriptions]);
-
-          const displayedSubs = useMemo(() => {
-              return derivedSubscriptions.filter(sub => {
-                  const matchesSearch = sub.client.toLowerCase().includes(subSearch.toLowerCase());
-                  let matchesFilter = true;
-                  if (subFilter === 'EXPIRED') matchesFilter = sub.remainingDays < 0;
-                  else if (subFilter === 'WARNING') matchesFilter = sub.remainingDays >= 0 && sub.remainingDays <= 5;
-                  else if (subFilter === 'ACTIVE') matchesFilter = sub.remainingDays > 5;
-                  return matchesSearch && matchesFilter;
-              });
-          }, [derivedSubscriptions, subSearch, subFilter]);
-
-          const toggleSubFilter = (type) => {
-              setSubFilter(prev => prev === type ? 'ALL' : type);
-          };
-
-          const monthlyData = useMemo(() => {
-            const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const targetYear = parseInt(filterMonth.split('-')[0], 10);
-            
-            const data = months.map(m => ({ month: m, net: 0 }));
-            
-            for (let i = 0; i < 12; i++) {
-              let net = 0;
-              const monthItems = cashFlow.filter(item => {
-                if(!item.date) return false;
-                const d = new Date(item.date + 'T00:00:00');
-                return d.getFullYear() === targetYear && d.getMonth() === i;
-              });
-
-              monthItems.forEach(item => {
-                net += (Number(item.income) || 0) - (Number(item.expense) || 0);
-              });
-
-              data[i].net = net;
-            }
-            return data;
-          }, [cashFlow, filterMonth]);
-
-          const monthlyActiveUsersData = useMemo(() => {
-            const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const targetYear = parseInt(filterMonth.split('-')[0], 10);
-            
-            const data = months.map(m => ({ month: m, activeUsers: 0 }));
-            
-            for (let i = 0; i < 12; i++) {
-              const monthStart = new Date(targetYear, i, 1);
-              const monthEnd = new Date(targetYear, i + 1, 0); 
-              
-              let activeCount = 0;
-              derivedSubscriptions.forEach(sub => {
-                if (!sub.startDate || !sub.endDate) return;
-                const subStart = new Date(sub.startDate + 'T00:00:00');
-                const subEnd = new Date(sub.endDate + 'T00:00:00');
-                
-                if (subStart <= monthEnd && subEnd >= monthStart) {
-                  activeCount++;
-                }
-              });
-              data[i].activeUsers = activeCount;
-            }
-            return data;
-          }, [derivedSubscriptions, filterMonth]);
-
-          const metrics = useMemo(() => {
-            const [targetYearStr, targetMonthStr] = filterMonth.split('-');
-            const targetYear = parseInt(targetYearStr, 10);
-            const targetMonth = parseInt(targetMonthStr, 10) - 1;
-
-            let pMonth = targetMonth - 1;
-            let pYear = targetYear;
-            if (pMonth < 0) {
-                pMonth = 11;
-                pYear -= 1;
-            }
-
-            let globalIncome = 0;
-            let globalExpense = 0;
-
-            let prevMonthIncome = 0;
-            let prevMonthExpense = 0;
-
-            let monthlyIncome = 0;
-            let monthlyExpense = 0;
-            
-            let monthlySaaSIncome = 0;
-            let monthlyOtherIncome = 0;
-            let monthlyCommissionExpense = 0;
-            let monthlyOtherExpense = 0;
-
-            cashFlow.forEach(item => {
-              const inc = Number(item.income) || 0;
-              const exp = Number(item.expense) || 0;
-
-              const categoryStr = String(item.category || '');
-              const voucherStr = String(item.voucher || '');
-
-              globalIncome += inc;
-              globalExpense += exp;
-
-              const d = item.date ? new Date(item.date + 'T00:00:00') : null;
-              if (d) {
-                const itemMonth = d.getMonth();
-                const itemYear = d.getFullYear();
-
-                if (itemMonth === targetMonth && itemYear === targetYear) {
-                  monthlyIncome += inc;
-                  monthlyExpense += exp;
-
-                  if (inc > 0) {
-                    if (categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente')) {
-                      monthlySaaSIncome += inc;
-                    } else {
-                      monthlyOtherIncome += inc;
-                    }
-                  }
-
-                  if (exp > 0) {
-                     if (categoryStr.toLowerCase().includes('comision') || categoryStr.toLowerCase().includes('comisión')) {
-                       monthlyCommissionExpense += exp;
-                     } else {
-                       monthlyOtherExpense += exp;
-                     }
-                  }
-                }
-
-                if (itemMonth === pMonth && itemYear === pYear) {
-                    prevMonthIncome += inc;
-                    prevMonthExpense += exp;
-                }
-              }
-            });
-
-            const globalNetProfit = globalIncome - globalExpense;
-            const prevMonthNetProfit = prevMonthIncome - prevMonthExpense;
-            const netProfit = monthlyIncome - monthlyExpense;
-
-            return { 
-              globalNetProfit,
-              prevMonthNetProfit,
-              monthlyIncome, monthlySaaSIncome, monthlyOtherIncome, 
-              monthlyExpense, monthlyCommissionExpense, monthlyOtherExpense, 
-              netProfit
-            };
-          }, [cashFlow, filterMonth]);
-
-          const filteredDetails = useMemo(() => {
-            if (!activeFilter) return [];
-            
-            const [targetYearStr, targetMonthStr] = filterMonth.split('-');
-            const targetYear = parseInt(targetYearStr, 10);
-            const targetMonth = parseInt(targetMonthStr, 10) - 1;
-
-            return cashFlow.filter(item => {
-                const d = item.date ? new Date(item.date + 'T00:00:00') : null;
-                if (!d || d.getMonth() !== targetMonth || d.getFullYear() !== targetYear) return false;
-
-                const inc = Number(item.income) || 0;
-                const exp = Number(item.expense) || 0;
-                const categoryStr = String(item.category || '');
-                const voucherStr = String(item.voucher || '');
-
-                if (activeFilter === 'SAAS_INCOME') {
-                    return inc > 0 && (categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente'));
-                }
-                if (activeFilter === 'OTHER_INCOME') {
-                    return inc > 0 && !(categoryStr.includes('SaaS') || (!categoryStr && voucherStr !== 'Pendiente'));
-                }
-                if (activeFilter === 'COMMISSION_EXPENSE') {
-                    return exp > 0 && (categoryStr.toLowerCase().includes('comision') || categoryStr.toLowerCase().includes('comisión'));
-                }
-                if (activeFilter === 'OTHER_EXPENSE') {
-                    return exp > 0 && !(categoryStr.toLowerCase().includes('comision') || categoryStr.toLowerCase().includes('comisión'));
-                }
-                return false;
-            }).sort((a,b) => new Date(b.date) - new Date(a.date));
-
-          }, [cashFlow, filterMonth, activeFilter]);
-
-          const sendToGoogleSheets = async (action, payload) => {
-            if (!scriptUrl || scriptUrl.trim() === '') return true;
-
-            try {
-              await fetch(scriptUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: {
-                  'Content-Type': 'text/plain;charset=utf-8', 
-                },
-                body: JSON.stringify({ action, payload })
-              });
-              return true;
-            } catch (error) {
-              console.error("Error envío:", error);
-              return false;
-            }
-          };
-
-          const openNewModal = () => {
-             setEditingRecord(null);
-             setShowCashFlowModal(true);
-          };
-
-          const openEditModal = (record) => {
-             setEditingRecord(record);
-             setShowCashFlowModal(true);
-          };
-
-          const handleSaveCashFlow = async (data) => {
-            setIsSaving(true);
-            const isUpdate = !!data.id;
-            const cashEntryId = isUpdate ? data.id : Date.now();
-            const montoCashFlow = data.income > 0 ? data.income : -data.expense;
-
-            const newCashEntry = { 
-                id: cashEntryId, 
-                date: data.date,
-                client: data.client,
-                concept: data.concept,
-                monto: montoCashFlow,
-                method: data.method,
-                voucher: data.voucher,
-                voucherUrl: data.voucherUrl,
-                notes: data.notes,
-                category: data.category,
-                income: data.income || 0,
-                expense: data.expense || 0
-            };
-
-            if (isUpdate) {
-                setCashFlow(prev => prev.map(item => item.id === newCashEntry.id ? newCashEntry : item));
-            } else {
-                setCashFlow(prev => [...prev, newCashEntry]);
-            }
-            
-            if (!scriptUrl || scriptUrl.trim() === '') {
-              setIsSaving(false);
-              setShowCashFlowModal(false);
-              showMessage(isUpdate ? 'Editado localmente.' : 'Guardado localmente.');
-              return;
-            }
-
-            const action = isUpdate ? 'updateCashFlow' : 'saveCashFlow';
-            const cashFlowSuccess = await sendToGoogleSheets(action, newCashEntry);
-            
-            setIsSaving(false);
-            setShowCashFlowModal(false);
-
-            if (cashFlowSuccess) {
-              showMessage(isUpdate ? 'Actualizado en Google Sheets.' : 'Sincronizado con Google Sheets.');
-            } else {
-              showMessage('Guardado localmente, pero falló la conexión con Sheets.', 'error');
-            }
-          };
-
-          const toggleFilter = (filterType) => {
-             setActiveFilter(prev => prev === filterType ? null : filterType);
-          };
-
-          return (
-            <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-800">
-              
-              {isFetchingData && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white shadow-xl rounded-full px-6 py-2 flex items-center gap-3 animate-fade-in">
-                  <RefreshCw className="animate-spin" size={18} />
-                  <p className="text-sm font-medium">Sincronizando con base de datos...</p>
-                </div>
-              )}
-
-              {notification && (
-                <div className={`fixed top-4 right-4 z-50 bg-white border-l-4 ${notification.type === 'error' ? 'border-rose-500' : 'border-emerald-500'} shadow-xl rounded-r-lg p-4 flex items-center gap-3 animate-fade-in`}>
-                  {notification.type === 'error' ? <AlertCircle className="text-rose-500" size={20} /> : <CheckCircle2 className="text-emerald-500" size={20} />}
-                  <p className="text-sm font-medium text-slate-700">{notification.msg}</p>
-                </div>
-              )}
-
-              {showCashFlowModal && (
-                <ModalCashFlow 
-                   onClose={() => setShowCashFlowModal(false)} 
-                   onSave={handleSaveCashFlow} 
-                   isSaving={isSaving} 
-                   initialData={editingRecord}
-                />
-              )}
-
-              <nav className="w-full md:w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 shadow-xl z-10">
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Zap className="text-amber-400 fill-amber-400" size={24}/> GestorPro
-                  </h1>
-                  <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">Smart Manager</p>
-                </div>
-                <div className="flex-1 px-4 space-y-2">
-                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                    <LayoutDashboard size={20} />
-                    <span className="font-medium">Dashboard</span>
-                  </button>
-                  <button onClick={() => setActiveTab('cashflow')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'cashflow' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                    <Wallet size={20} />
-                    <span className="font-medium">Flujo de Caja</span>
-                  </button>
-                  <button onClick={() => setActiveTab('subscriptions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'subscriptions' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                    <Users size={20} />
-                    <span className="font-medium">Suscripciones</span>
-                  </button>
-                  <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                    <Settings size={20} />
-                    <span className="font-medium">Configuración</span>
-                  </button>
-                </div>
-              </nav>
-
-              <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-                
-                {/* DASHBOARD */}
-                {activeTab === 'dashboard' && (
-                  <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Resumen General</h2>
-                        <p className="text-slate-500">Analiza el rendimiento de tu negocio.</p>
-                        {!scriptUrl && (
-                          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm flex items-start gap-2">
-                              <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                              <p><strong>Modo Local:</strong> La base de datos no está conectada. Ve a <b>Configuración</b> para sincronizar con Google Sheets.</p>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
-                        <Calendar size={18} className="text-blue-600" />
-                        <input 
-                            type="month" 
-                            value={filterMonth}
-                            onChange={(e) => {
-                              if (e.target.value) setFilterMonth(e.target.value);
-                            }}
-                            className="outline-none border-none bg-transparent text-slate-700 font-bold cursor-pointer"
-                        />
-                      </div>
-                    </header>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      
-                      {/* Utilidad Neta GLOBAL */}
-                      <div className="bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-800 flex flex-col justify-center hover:shadow-md transition-shadow relative overflow-hidden lg:col-span-2">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-blue-500/20 text-blue-400 rounded-xl"><Globe size={24} /></div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Utilidad Neta (Global)</p>
-                            <p className="text-3xl font-bold text-white">S/ {metrics.globalNetProfit.toFixed(2)}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">Acumulado histórico de todo el negocio.</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Utilidad Neta (Mes Seleccionado) */}
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center hover:shadow-md transition-shadow relative overflow-hidden lg:col-span-2">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><Wallet size={24} /></div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Utilidad Neta ({filterMonth})</p>
-                            <p className="text-3xl font-bold text-slate-800">S/ {metrics.netProfit.toFixed(2)}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${metrics.netProfit >= metrics.prevMonthNetProfit ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                 Mes anterior: S/ {metrics.prevMonthNetProfit.toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* CLICKABLES */}
-                      
-                      <div 
-                        onClick={() => toggleFilter('SAAS_INCOME')}
-                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'SAAS_INCOME' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-100'}`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2 text-slate-500"><TrendingUp size={16} className="text-emerald-500"/> <span className="text-xs font-medium">Ingresos por SaaS</span></div>
-                            <Search size={14} className="text-slate-300" />
-                        </div>
-                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlySaaSIncome.toFixed(2)}</p>
-                      </div>
-
-                      <div 
-                        onClick={() => toggleFilter('OTHER_INCOME')}
-                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'OTHER_INCOME' ? 'border-emerald-400 ring-2 ring-emerald-400/20' : 'border-slate-100'}`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2 text-slate-500"><TrendingUp size={16} className="text-emerald-400"/> <span className="text-xs font-medium">Otros Ingresos</span></div>
-                            <Search size={14} className="text-slate-300" />
-                        </div>
-                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlyOtherIncome.toFixed(2)}</p>
-                      </div>
-
-                      <div 
-                        onClick={() => toggleFilter('COMMISSION_EXPENSE')}
-                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'COMMISSION_EXPENSE' ? 'border-rose-400 ring-2 ring-rose-400/20' : 'border-slate-100'}`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2 text-slate-500"><TrendingDown size={16} className="text-rose-400"/> <span className="text-xs font-medium">Egresos por Comisión</span></div>
-                            <Search size={14} className="text-slate-300" />
-                        </div>
-                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlyCommissionExpense.toFixed(2)}</p>
-                      </div>
-
-                      <div 
-                        onClick={() => toggleFilter('OTHER_EXPENSE')}
-                        className={`bg-white p-5 rounded-2xl shadow-sm border cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${activeFilter === 'OTHER_EXPENSE' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-100'}`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2 text-slate-500"><TrendingDown size={16} className="text-rose-500"/> <span className="text-xs font-medium">Otros Egresos</span></div>
-                            <Search size={14} className="text-slate-300" />
-                        </div>
-                        <p className="text-xl font-bold text-slate-800">S/ {metrics.monthlyOtherExpense.toFixed(2)}</p>
-                      </div>
-
-                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow lg:col-span-4">
-                        <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><Users size={24} /></div>
+            <!-- Panel de Resultados (Oculto por defecto) -->
+            <div id="results-panel" class="hidden">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3 text-green-700">
+                        <i class="ph-fill ph-check-circle text-2xl"></i>
                         <div>
-                          <p className="text-sm font-medium text-slate-500">Suscripciones Activas vs Corte</p>
-                          {/* Sumamos activas sanas + las que están por vencer (warning) */}
-                          <p className="text-2xl font-bold text-slate-800">{subMetrics.active + subMetrics.warning} <span className="text-slate-400 text-base font-normal">/ {subMetrics.expired}</span></p>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* SECCIÓN DE DETALLES */}
-                    {activeFilter && (
-                      <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6 animate-fade-in">
-                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-                          <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                             <Search size={20} className="text-blue-600"/> 
-                             Detalle: {
-                                activeFilter === 'SAAS_INCOME' ? 'Ingresos por Ventas SaaS' : 
-                                activeFilter === 'OTHER_INCOME' ? 'Otros Ingresos' : 
-                                activeFilter === 'COMMISSION_EXPENSE' ? 'Egresos por Comisiones' : 'Otros Egresos'
-                             } ({filterMonth})
-                          </h3>
-                          <button onClick={() => setActiveFilter(null)} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"><X size={20}/></button>
-                        </div>
-
-                        <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
-                          <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="sticky top-0 bg-white shadow-[0_1px_0_0_#e2e8f0]">
-                              <tr className="text-slate-500">
-                                <th className="p-3 font-semibold">Fecha</th>
-                                <th className="p-3 font-semibold">Cliente/Ref</th>
-                                <th className="p-3 font-semibold">Categoría</th>
-                                <th className="p-3 font-semibold">Concepto</th>
-                                <th className="p-3 font-semibold text-right">Monto</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                               {filteredDetails.length > 0 ? filteredDetails.map(item => (
-                                  <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50">
-                                     <td className="p-3 text-slate-600">{item.date}</td>
-                                     <td className="p-3 font-medium text-slate-800">{item.client}</td>
-                                     <td className="p-3 text-xs text-slate-500">{item.category || '-'}</td>
-                                     <td className="p-3 text-slate-600 max-w-[200px] truncate" title={item.concept}>{item.concept}</td>
-                                     <td className={`p-3 font-bold text-right ${item.income > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                        {item.income > 0 ? `+ S/ ${Number(item.income).toFixed(2)}` : `- S/ ${Number(item.expense).toFixed(2)}`}
-                                     </td>
-                                  </tr>
-                               )) : (
-                                  <tr><td colSpan="5" className="p-6 text-center text-slate-500">No hay movimientos en esta categoría.</td></tr>
-                               )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 gap-6">
-                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow w-full">
-                         <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                           <TrendingUp className="text-blue-600" size={20} />
-                           Evolución de Utilidad Neta ({filterMonth.split('-')[0]})
-                         </h3>
-                         <NetProfitChart data={monthlyData} />
-                      </div>
-
-                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow w-full">
-                         <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                           <Users className="text-violet-600" size={20} />
-                           Usuarios Activos por Mes ({filterMonth.split('-')[0]})
-                         </h3>
-                         <ActiveUsersChart data={monthlyActiveUsersData} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* FLUJO DE CAJA */}
-                {activeTab === 'cashflow' && (
-                  <div className="space-y-6 animate-fade-in">
-                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Flujo de Caja</h2>
-                        <p className="text-slate-500">Tus registros financieros detallados.</p>
-                      </div>
-                      <button onClick={openNewModal} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-sm hover:shadow-md shrink-0">
-                        <Plus size={20} /> Nuevo Movimiento
-                      </button>
-                    </header>
-
-                    {/* FILTROS FLUJO DE CAJA */}
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                           type="text" 
-                           placeholder="Buscar por cliente o concepto..." 
-                           value={cashFlowSearch}
-                           onChange={e => setCashFlowSearch(e.target.value)}
-                           className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow hover:shadow-sm" 
-                        />
-                      </div>
-                      <select 
-                         value={cashFlowTypeFilter} 
-                         onChange={e => setCashFlowTypeFilter(e.target.value)} 
-                         className="border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:shadow-sm transition-shadow text-slate-700 font-medium"
-                      >
-                        <option value="ALL">Todos los Tipos</option>
-                        <option value="INCOME">Solo Ingresos</option>
-                        <option value="EXPENSE">Solo Egresos</option>
-                      </select>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
-                          <thead>
-                            <tr className="bg-slate-50 text-slate-600 border-b">
-                              <th className="p-4 font-semibold">Fecha</th>
-                              <th className="p-4 font-semibold">Cliente / Referencia</th>
-                              <th className="p-4 font-semibold">Concepto</th>
-                              <th className="p-4 font-semibold">Monto</th>
-                              <th className="p-4 font-semibold">Medio</th>
-                              <th className="p-4 font-semibold">Comprobante</th>
-                              <th className="p-4 font-semibold text-center">Acciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {displayedCashFlow.map((item) => (
-                              <tr key={item.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                                <td className="p-4 text-slate-600">{item.date}</td>
-                                <td className="p-4 font-semibold text-blue-600">{item.client}</td>
-                                <td className="p-4">
-                                  <p className="text-slate-700 max-w-[200px] truncate" title={item.concept}>{item.concept}</p>
-                                  <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold ${item.income > 0 ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600'}`}>
-                                    {item.category || '-'}
-                                  </span>
-                                </td>
-                                <td className={`p-4 font-bold ${item.income > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {item.income > 0 ? `+ S/ ${item.income.toFixed(2)}` : `- S/ ${item.expense.toFixed(2)}`}
-                                </td>
-                                <td className="p-4"><span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium">{item.method}</span></td>
-                                <td className="p-4">
-                                  <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-1 rounded-md text-xs font-medium ${item.voucher === 'Pendiente / Sin Comprobante' || item.voucher === 'Pendiente' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                                      {item.voucher}
-                                    </span>
-                                    {item.voucherUrl && (
-                                      <a href={item.voucherUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700 transition-colors" title="Abrir comprobante">
-                                        <ExternalLink size={16} />
-                                      </a>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="p-4 text-center">
-                                  <button onClick={() => openEditModal(item)} className="p-2 bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors" title="Editar registro">
-                                    <Edit2 size={16} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                            {displayedCashFlow.length === 0 && (
-                              <tr><td colSpan="7" className="p-8 text-center text-slate-500">
-                                {isFetchingData ? 'Cargando datos...' : 'No se encontraron registros de caja.'}
-                              </td></tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* SUSCRIPCIONES */}
-                {activeTab === 'subscriptions' && (
-                  <div className="space-y-6 animate-fade-in">
-                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Suscripciones Generadas</h2>
-                        <p className="text-slate-500">Control de renovaciones basado en caja.</p>
-                      </div>
-                    </header>
-
-                    {/* TARJETAS DE ESTADO DE SUSCRIPCIONES */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-                        <div onClick={() => toggleSubFilter('ACTIVE')} className={`p-5 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1 ${subFilter === 'ACTIVE' ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-400/20' : 'bg-white border-slate-200 hover:border-emerald-300'}`}>
-                            <div className="flex justify-between items-center"><span className="text-emerald-600 font-bold tracking-wide">Activos</span><ShieldCheck size={24} className="text-emerald-500"/></div>
-                            <p className="text-4xl font-bold text-slate-800 mt-3">{subMetrics.active}</p>
-                            <p className="text-xs text-slate-500 mt-1 font-medium">Sanos (&gt; 5 días)</p>
-                        </div>
-                        <div onClick={() => toggleSubFilter('WARNING')} className={`p-5 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1 ${subFilter === 'WARNING' ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-400/20' : 'bg-white border-slate-200 hover:border-amber-300'}`}>
-                            <div className="flex justify-between items-center"><span className="text-amber-600 font-bold tracking-wide">Por Vencer</span><Clock size={24} className="text-amber-500"/></div>
-                            <p className="text-4xl font-bold text-slate-800 mt-3">{subMetrics.warning}</p>
-                            <p className="text-xs text-slate-500 mt-1 font-medium">En riesgo (0 a 5 días)</p>
-                        </div>
-                        <div onClick={() => toggleSubFilter('EXPIRED')} className={`p-5 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1 ${subFilter === 'EXPIRED' ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-400/20' : 'bg-white border-slate-200 hover:border-rose-300'}`}>
-                            <div className="flex justify-between items-center"><span className="text-rose-600 font-bold tracking-wide">Vencidos</span><AlertTriangle size={24} className="text-rose-500"/></div>
-                            <p className="text-4xl font-bold text-slate-800 mt-3">{subMetrics.expired}</p>
-                            <p className="text-xs text-slate-500 mt-1 font-medium">Corte de servicio (&lt; 0 días)</p>
+                            <p class="font-medium">¡Archivo procesado con éxito!</p>
+                            <p class="text-sm text-green-600" id="record-count">0 operaciones detectadas</p>
                         </div>
                     </div>
+                </div>
 
-                    {/* FILTRO TEXTUAL SUSCRIPCIONES */}
-                    <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
-                         type="text" 
-                         placeholder="Buscar suscripción por nombre de cliente o teléfono..." 
-                         value={subSearch}
-                         onChange={e => setSubSearch(e.target.value)}
-                         className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow hover:shadow-sm" 
-                      />
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
-                          <thead>
-                            <tr className="bg-slate-50 text-slate-600 border-b">
-                              <th className="p-4 font-semibold">Cliente</th>
-                              <th className="p-4 font-semibold">Vencimiento</th>
-                              <th className="p-4 font-semibold">Días Restantes</th>
-                              <th className="p-4 font-semibold">Estado</th>
-                              <th className="p-4 font-semibold text-center">Meses Activos</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {displayedSubs.map((sub) => (
-                              <tr key={sub.client} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                                <td className="p-4 font-bold text-slate-800">{sub.client}</td>
-                                <td className="p-4 text-slate-600">{sub.endDate}</td>
-                                <td className="p-4">
-                                  <div className={`flex items-center gap-1.5 ${sub.remainingDays < 0 ? 'text-rose-600' : sub.remainingDays <= 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                    <Clock size={16} />
-                                    <span className="font-bold">{sub.remainingDays} días</span>
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  <span className={`px-3 py-1 rounded-lg text-xs font-bold tracking-wide ${
-                                    sub.remainingDays < 0 ? 'bg-rose-100 text-rose-700' : sub.remainingDays <= 5 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                                  }`}>
-                                    {sub.remainingDays < 0 ? 'CORTE' : sub.remainingDays <= 5 ? 'RENOVAR' : 'ACTIVO'}
-                                  </span>
-                                </td>
-                                <td className="p-4 text-center font-medium text-slate-600">{sub.activeMonths}</td>
-                              </tr>
-                            ))}
-                            {displayedSubs.length === 0 && (
-                              <tr><td colSpan="5" className="p-8 text-center text-slate-500">
-                                {isFetchingData ? 'Cargando datos...' : 'No se encontraron suscripciones con este filtro.'}
-                              </td></tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* CONFIGURACIÓN */}
-                {activeTab === 'settings' && (
-                  <div className="space-y-6 animate-fade-in max-w-4xl">
-                     <header>
-                      <h2 className="text-2xl font-bold text-slate-800">Configuración</h2>
-                      <p className="text-slate-500">Ajusta las conexiones y preferencias de tu gestor.</p>
-                    </header>
-
-                    <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 space-y-8">
-                       
-                       {/* 1. SECCIÓN: SCRIPT PARA COPIAR */}
-                       <div>
-                         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
-                           1. Código para Google Apps Script
-                         </h3>
-                         <p className="text-slate-600 mb-4 text-sm">
-                           Cópialo y haz clic en <span className="font-semibold text-rose-600">Implementar &gt; Administrar implementaciones &gt; Editar &gt; Nueva versión &gt; Implementar</span>.
-                         </p>
-                         <div className="relative group">
-                           <pre className="bg-slate-900 text-slate-300 p-4 rounded-xl text-xs overflow-x-auto border border-slate-700 h-64">
-                             <code>{appsScriptCode}</code>
-                           </pre>
-                           <button 
-                             onClick={copyToClipboard}
-                             className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors flex items-center gap-2"
-                           >
-                             <Copy size={16} /> <span className="text-xs font-medium">Copiar código</span>
-                           </button>
-                         </div>
-                       </div>
-
-                       <hr className="border-slate-100" />
-
-                       {/* 2. SECCIÓN: CONECTAR URL */}
-                       <div>
-                         <div className="flex items-center justify-between mb-4">
-                           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                             <Database className="text-blue-600" size={22} /> 2. Conectar a la Nube
-                           </h3>
-                           <span className={`px-3 py-1 text-sm font-bold rounded-full ${scriptUrl ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                              {scriptUrl ? 'Conectado' : 'Desconectado'}
-                           </span>
-                         </div>
-                         
-                         <p className="text-slate-600 mb-4 text-sm">
-                           Pega aquí la <b>URL de la aplicación web</b> que te da Google al implementar el código de arriba.
-                         </p>
-
-                         <div className="flex flex-col sm:flex-row gap-4 items-start">
-                            <div className="flex-1 w-full">
-                              <input
-                                type="url"
-                                value={tempScriptUrl}
-                                onChange={(e) => setTempScriptUrl(e.target.value)}
-                                placeholder="https://script.google.com/macros/s/.../exec"
-                                className="w-full border-2 border-slate-200 rounded-xl p-3 focus:border-blue-500 focus:ring-0 outline-none transition-colors"
-                              />
-                            </div>
-                            <button 
-                              onClick={handleSaveConfig} 
-                              disabled={isFetchingData}
-                              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 disabled:opacity-75"
-                            >
-                              {isFetchingData ? <RefreshCw className="animate-spin" size={18} /> : null}
-                              Guardar y Sincronizar
-                            </button>
-                         </div>
-
-                         {scriptUrl && (
-                           <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3">
-                             <CheckCircle2 className="text-emerald-500 shrink-0 mt-0.5" />
-                             <div>
-                               <p className="text-emerald-800 font-semibold text-sm">Integración lista</p>
-                               <p className="text-emerald-700 text-sm mt-1">Tu información se descargará al iniciar la app y cada movimiento nuevo se guardará en tu documento de Google Sheets.</p>
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                    </div>
-                  </div>
-                )}
-
-              </main>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <button onclick="downloadExcel()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-green-200">
+                        <i class="ph ph-file-xls text-xl"></i>
+                        Descargar Plantilla Excel
+                    </button>
+                    <button onclick="downloadTXT()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-blue-200">
+                        <i class="ph ph-file-text text-xl"></i>
+                        Descargar TXT SUNAT
+                    </button>
+                </div>
             </div>
-          );
+        </div>
+    </div>
+
+    <script>
+        // Variables globales para almacenar los datos procesados
+        let transformedDataArray = [];
+        let globalRUC = "";
+        let globalPeriod = "";
+
+        // UI Elements
+        const fileInput = document.getElementById('file-upload');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        const resultsPanel = document.getElementById('results-panel');
+        const rucInput = document.getElementById('ruc-input');
+        const periodInput = document.getElementById('period-input');
+        const dropZone = document.getElementById('drop-zone');
+
+        // Sistema de notificaciones (reemplazo de alert)
+        function showToast(message, type = 'error') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColor = type === 'error' ? 'bg-red-500' : 'bg-green-500';
+            const icon = type === 'error' ? 'ph-warning-circle' : 'ph-check-circle';
+
+            toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-x-full opacity-0`;
+            toast.innerHTML = `
+                <i class="ph ${icon} text-xl"></i>
+                <span class="font-medium">${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full', 'opacity-0');
+            });
+
+            // Remove after 4 seconds
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
         }
 
-        const rootElement = document.getElementById('root');
-        const root = createRoot(rootElement);
-        root.render(<App />);
+        // Efectos del Dropzone
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
 
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        }
+
+        // Manejo de la carga del archivo
+        fileInput.addEventListener('change', handleFile);
+        dropZone.addEventListener('drop', handleDrop);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) {
+                fileInput.files = files;
+                handleFile({ target: fileInput });
+            }
+        }
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Validaciones de formulario
+            const ruc = rucInput.value.trim();
+            const periodo = periodInput.value.trim();
+
+            if (ruc.length !== 11 || isNaN(ruc)) {
+                showToast("Por favor, ingresa un RUC válido de 11 dígitos.", "error");
+                fileInput.value = "";
+                return;
+            }
+            if (periodo.length !== 6 || isNaN(periodo)) {
+                showToast("Por favor, ingresa un periodo válido (Ej: 202603).", "error");
+                fileInput.value = "";
+                return;
+            }
+
+            globalRUC = ruc;
+            globalPeriod = periodo + "00"; // SUNAT requiere 8 dígitos para el periodo en la columna (AAAAMM00)
+
+            fileNameDisplay.textContent = file.name;
+            fileNameDisplay.classList.remove('text-gray-400');
+            fileNameDisplay.classList.add('text-blue-600', 'font-medium');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+                    
+                    // Asumimos que los datos están en la primera hoja
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Convertir a JSON
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    
+                    transformDataToDiario(jsonRows);
+                } catch (error) {
+                    showToast("Error al leer el Excel. Verifica que no esté corrupto.", "error");
+                    console.error(error);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function transformDataToDiario(rows) {
+            transformedDataArray = [];
+            let cuoCounter = 1;
+            let validRecords = 0;
+
+            rows.forEach(row => {
+                // Adaptabilidad: Buscar columnas sin importar mayúsculas
+                const getVal = (keyMatch) => {
+                    const key = Object.keys(row).find(k => k.toLowerCase().includes(keyMatch));
+                    return key ? row[key] : "";
+                };
+
+                let monto = parseFloat(getVal('monto'));
+                if (isNaN(monto) || monto <= 0) return; // Ignorar filas sin montos válidos
+
+                validRecords++;
+
+                // Formateo de fecha
+                let fechaRaw = getVal('fecha');
+                let fechaFormateada = "";
+                if (fechaRaw instanceof Date) {
+                    fechaFormateada = `${String(fechaRaw.getDate()).padStart(2, '0')}/${String(fechaRaw.getMonth() + 1).padStart(2, '0')}/${fechaRaw.getFullYear()}`;
+                } else if (typeof fechaRaw === 'string') {
+                    // Intento de parseo de string dd/mm/yyyy o yyyy-mm-dd
+                    if(fechaRaw.includes('T')) fechaRaw = fechaRaw.split('T')[0];
+                    let parts = fechaRaw.includes('-') ? fechaRaw.split('-') : fechaRaw.split('/');
+                    if(parts.length === 3) {
+                        if(parts[0].length === 4) fechaFormateada = `${parts[2]}/${parts[1]}/${parts[0]}`; // yyyy-mm-dd
+                        else fechaFormateada = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`; // dd/mm/yyyy
+                    } else {
+                        fechaFormateada = "01/01/2000"; // fallback
+                    }
+                } else {
+                    fechaFormateada = "01/01/2000";
+                }
+
+                const cliente = String(getVal('cliente'));
+                const concepto = String(getVal('concepto')).substring(0, 100) || "Ingreso";
+                const numComprobante = String(getVal('# documento') || getVal('comprobante') || "000000");
+
+                // Logica Documento Identidad
+                const tipoDocIdent = (cliente.length === 11 && !isNaN(cliente)) ? "6" : "1";
+                const numDocIdent = (!isNaN(cliente) && cliente.length > 0) ? cliente : "00000000";
+
+                // Calculo de impuestos (Asumiendo que el Monto total incluye IGV)
+                const baseImponible = parseFloat((monto / 1.18).toFixed(2));
+                const igv = parseFloat((monto - baseImponible).toFixed(2));
+
+                // CUO de Venta
+                const cuoVenta = `VTA${String(cuoCounter).padStart(4, '0')}`;
+                const serie = "B001"; // Default para boletas/ventas generales
+                const correlativoDoc = String(cuoCounter).padStart(6, '0');
+
+                // Asiento 1: Cuenta por cobrar (12)
+                transformedDataArray.push([globalPeriod, cuoVenta, "M0001", "1212", tipoDocIdent, numDocIdent, "03", serie, correlativoDoc, fechaFormateada, concepto, monto.toFixed(2), "0.00"]);
+                // Asiento 2: Tributos por pagar (40)
+                transformedDataArray.push([globalPeriod, cuoVenta, "M0002", "40111", tipoDocIdent, numDocIdent, "03", serie, correlativoDoc, fechaFormateada, concepto, "0.00", igv.toFixed(2)]);
+                // Asiento 3: Ingresos/Ventas (70)
+                transformedDataArray.push([globalPeriod, cuoVenta, "M0003", "7032", tipoDocIdent, numDocIdent, "03", serie, correlativoDoc, fechaFormateada, concepto, "0.00", baseImponible.toFixed(2)]);
+
+                // CUO de Cobranza (Ingreso al banco/caja)
+                const cuoCobro = `COB${String(cuoCounter).padStart(4, '0')}`;
+                
+                // Asiento 4: Ingreso a Caja/Bancos (10)
+                transformedDataArray.push([globalPeriod, cuoCobro, "M0001", "1041", tipoDocIdent, numDocIdent, "00", "0", "0", fechaFormateada, `Cobro - ${concepto}`, monto.toFixed(2), "0.00"]);
+                // Asiento 5: Cancelación de cuenta por cobrar (12)
+                transformedDataArray.push([globalPeriod, cuoCobro, "M0002", "1212", tipoDocIdent, numDocIdent, "00", "0", "0", fechaFormateada, `Cobro - ${concepto}`, "0.00", monto.toFixed(2)]);
+
+                cuoCounter++;
+            });
+
+            if (validRecords === 0) {
+                showToast("No se encontraron registros con montos válidos.", "error");
+                return;
+            }
+
+            document.getElementById('record-count').textContent = `${validRecords} operaciones convertidas a ${transformedDataArray.length} asientos contables.`;
+            resultsPanel.classList.remove('hidden');
+            showToast("Procesamiento completado", "success");
+        }
+
+        function downloadExcel() {
+            if(transformedDataArray.length === 0) return;
+
+            const headers = [
+                "Periodo", "CUO", "Correlativo", "Cuenta_Contable", "Tipo_Doc_Ident", 
+                "Num_Doc_Ident", "Tipo_Comprobante", "Serie", "Numero", "Fecha", 
+                "Glosa", "Debe", "Haber"
+            ];
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...transformedDataArray]);
+            
+            // Auto ajustar ancho de columnas (básico)
+            const wscols = headers.map(h => ({wch: Math.max(h.length, 12)}));
+            ws['!cols'] = wscols;
+
+            XLSX.utils.book_append_sheet(wb, ws, "Libro_Diario_Simp");
+            XLSX.writeFile(wb, `Plantilla_Diario_${globalPeriod.substring(0,6)}.xlsx`);
+        }
+
+        function downloadTXT() {
+            if(transformedDataArray.length === 0) return;
+
+            let txtContent = "";
+
+            transformedDataArray.forEach(row => {
+                // Mapear los 13 campos a la estructura de 21 campos del formato 5.2
+                const col1 = row[0]; // Periodo
+                const col2 = row[1]; // CUO
+                const col3 = row[2]; // Correlativo (M0001)
+                const col4 = row[3]; // Cuenta
+                const col5 = ""; // Cod Unidad Operacion
+                const col6 = ""; // Cod Centro Costos
+                const col7 = "PEN"; // Moneda
+                const col8 = row[4]; // Tipo Doc Ident
+                const col9 = row[5]; // Num Doc Ident
+                const col10 = String(row[6]).padStart(2, '0'); // Tipo Comprobante
+                const col11 = row[7]; // Serie
+                const col12 = row[8]; // Numero Comp
+                const col13 = row[9]; // Fecha contable
+                const col14 = ""; // Fecha Vencimiento
+                const col15 = row[9]; // Fecha Emision
+                const col16 = row[10]; // Glosa
+                const col17 = ""; // Glosa referencial
+                const col18 = row[11]; // Debe (ya viene con 2 decimales string)
+                const col19 = row[12]; // Haber (ya viene con 2 decimales string)
+                const col20 = ""; // Dato estructurado
+                const col21 = "1"; // Estado Operacion
+
+                const line = [col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, ""].join("|");
+                txtContent += line + "\n";
+            });
+
+            // Nombre Oficial SUNAT: LE + RUC + YYYYMM00 + 050200 + 00 + 1 + 1 + 1 + 1
+            const fileName = `LE${globalRUC}${globalPeriod.substring(0,6)}00050200001111.txt`;
+
+            // Crear y descargar archivo
+            const blob = new Blob([txtContent], { type: 'text/plain;charset=latin-1' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     </script>
 </body>
 </html>
